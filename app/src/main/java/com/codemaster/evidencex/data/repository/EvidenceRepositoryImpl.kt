@@ -409,7 +409,7 @@ class EvidenceRepositoryImpl(
             }
 
         } catch (e: Exception) {
-            // Ignorar si no hay red
+            android.util.Log.e("SyncPull", "Error al descargar datos de la nube: ${e.localizedMessage}", e)
         }
     }
 }

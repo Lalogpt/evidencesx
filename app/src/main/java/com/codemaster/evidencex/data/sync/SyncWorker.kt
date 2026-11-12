@@ -116,6 +116,7 @@ class SyncWorker(
                 dao.deleteSyncTask(task.id)
 
             } catch (e: Exception) {
+                android.util.Log.e("SyncWorker", "Error al subir tarea ${task.entityType}: ${e.localizedMessage}", e)
                 val newRetry = task.retryCount + 1
                 if (newRetry > 5) {
                     dao.updateSyncTaskStatus(task.id, "FAILED", newRetry, e.localizedMessage)

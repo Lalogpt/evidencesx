@@ -134,16 +134,21 @@ fun EvidenceXAppNavHost(viewModel: EvidenceViewModel = viewModel()) {
                 caseId = caseId,
                 investigatorId = currentUserId,
                 onEvidenceCaptured = { file, fileName, lat, lng, sensitive ->
-                    viewModel.captureEvidence(
-                        caseId = caseId,
-                        sourceFile = file,
-                        fileName = fileName,
-                        notes = if (sensitive) "EVIDENCIA SENSIBLE / CLASIFICADA" else "Levantamiento de evidencia multimedia con GPS.",
-                        lat = lat,
-                        lng = lng,
-                        investigatorId = currentUserId,
-                        sensitive = sensitive
-                    )
+                    try {
+                        viewModel.captureEvidence(
+                            caseId = caseId,
+                            sourceFile = file,
+                            fileName = fileName,
+                            notes = if (sensitive) "EVIDENCIA SENSIBLE / CLASIFICADA" else "Levantamiento de evidencia multimedia con GPS.",
+                            lat = lat,
+                            lng = lng,
+                            investigatorId = currentUserId,
+                            sensitive = sensitive
+                        )
+                        Toast.makeText(contextSafe(navController.context), "Evidencia guardada exitosamente", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(contextSafe(navController.context), "Error al guardar evidencia: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                    }
                     navController.popBackStack()
                 },
                 onBack = { navController.popBackStack() }
@@ -151,6 +156,8 @@ fun EvidenceXAppNavHost(viewModel: EvidenceViewModel = viewModel()) {
         }
     }
 }
+
+fun contextSafe(context: android.content.Context) = context
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -288,19 +295,27 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
     fun captureGpsAndSave(sourceFile: File, fileName: String, sensitive: Boolean) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                val lat = location?.latitude ?: 19.4326
-                val lng = location?.longitude ?: -99.1332
-                viewModel.captureEvidence(case.id, sourceFile, fileName, if (sensitive) "EVIDENCIA SENSIBLE / CLASIFICADA" else "Evidencia multimedia", lat, lng, currentUserId, sensitive)
-                Toast.makeText(context, "Evidencia guardada con GPS ($lat, $lng)", Toast.LENGTH_SHORT).show()
-            }.addOnFailureListener {
+        try {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                    val lat = location?.latitude ?: 19.4326
+                    val lng = location?.longitude ?: -99.1332
+                    try {
+                        viewModel.captureEvidence(case.id, sourceFile, fileName, if (sensitive) "EVIDENCIA SENSIBLE / CLASIFICADA" else "Evidencia multimedia", lat, lng, currentUserId, sensitive)
+                        Toast.makeText(context, "Evidencia guardada con GPS ($lat, $lng)", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error interno al guardar: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                    }
+                }.addOnFailureListener {
+                    viewModel.captureEvidence(case.id, sourceFile, fileName, "Evidencia multimedia", 19.4326, -99.1332, currentUserId, sensitive)
+                    Toast.makeText(context, "Evidencia guardada", Toast.LENGTH_SHORT).show()
+                }
+            } else {
                 viewModel.captureEvidence(case.id, sourceFile, fileName, "Evidencia multimedia", 19.4326, -99.1332, currentUserId, sensitive)
                 Toast.makeText(context, "Evidencia guardada", Toast.LENGTH_SHORT).show()
             }
-        } else {
-            viewModel.captureEvidence(case.id, sourceFile, fileName, "Evidencia multimedia", 19.4326, -99.1332, currentUserId, sensitive)
-            Toast.makeText(context, "Evidencia guardada", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(context, "Error al guardar evidencia: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -308,14 +323,18 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            val inputStream = context.contentResolver.openInputStream(uri)
-            val tempFile = File(context.cacheDir, "gallery_${System.currentTimeMillis()}.dat")
-            inputStream?.use { input ->
-                tempFile.outputStream().use { output ->
-                    input.copyTo(output)
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val tempFile = File(context.cacheDir, "gallery_${System.currentTimeMillis()}.dat")
+                inputStream?.use { input ->
+                    tempFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
                 }
+                captureGpsAndSave(tempFile, "archivo_galeria_${System.currentTimeMillis()}", isSensitiveEvidence)
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error al procesar archivo de galería: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
-            captureGpsAndSave(tempFile, "archivo_galeria_${System.currentTimeMillis()}", isSensitiveEvidence)
         }
     }
 
@@ -325,14 +344,18 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
         if (result.resultCode == android.app.Activity.RESULT_OK) {
             val videoUri = result.data?.data
             if (videoUri != null) {
-                val inputStream = context.contentResolver.openInputStream(videoUri)
-                val tempFile = File(context.cacheDir, "video_${System.currentTimeMillis()}.mp4")
-                inputStream?.use { input ->
-                    tempFile.outputStream().use { output ->
-                        input.copyTo(output)
+                try {
+                    val inputStream = context.contentResolver.openInputStream(videoUri)
+                    val tempFile = File(context.cacheDir, "video_${System.currentTimeMillis()}.mp4")
+                    inputStream?.use { input ->
+                        tempFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
                     }
+                    captureGpsAndSave(tempFile, tempFile.name, isSensitiveEvidence)
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Error al guardar video grabado: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
                 }
-                captureGpsAndSave(tempFile, tempFile.name, isSensitiveEvidence)
             }
         }
     }
@@ -552,7 +575,11 @@ fun AuditLogScreen(viewModel: EvidenceViewModel) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Bitácora y Cadena de Custodia") },
+                title = {
+                    Column {
+                        Text("Bitácora y Cadena de Custodia", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onSecondaryContainer
