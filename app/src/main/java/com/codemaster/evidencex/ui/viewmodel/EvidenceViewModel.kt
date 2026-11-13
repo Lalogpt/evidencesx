@@ -12,6 +12,7 @@ import com.codemaster.evidencex.data.pdf.PdfReportGenerator
 import com.codemaster.evidencex.data.repository.EvidenceRepositoryImpl
 import com.codemaster.evidencex.data.sync.SyncWorker
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +26,10 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
 
     private val database = EvidenceDatabase.getDatabase(application)
     private val repository = EvidenceRepositoryImpl(application, database.evidenceDao())
+
+    init {
+        startRealtimeSync()
+    }
 
     // Role management: ADMIN can view all cases; PERITO only views their own.
     private val _isAdmin = MutableStateFlow(true)
@@ -50,6 +55,45 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
 
     val auditEvents: StateFlow<List<AuditEventEntity>> = repository.allAuditEvents
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private fun startRealtimeSync() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val firestore = FirebaseFirestore.getInstance()
+
+                // Real-time listener for cases
+                firestore.collection("cases").addSnapshotListener { snapshot, _ ->
+                    if (snapshot != null) {
+                        viewModelScope.launch(Dispatchers.IO) {
+                            try {
+                                repository.syncPullFromCloud()
+                            } catch (e: Exception) {
+                                // Ignore
+                            }
+                        }
+                    }
+                }
+
+                // Real-time listener for evidences
+                firestore.collection("evidences").addSnapshotListener { snapshot, _ ->
+                    if (snapshot != null) {
+                        viewModelScope.launch(Dispatchers.IO) {
+                            try {
+                                repository.syncPullFromCloud()
+                            } catch (e: Exception) {
+                                // Ignore
+                            }
+                        }
+                    }
+                }
+
+                // Initial pull sync on startup
+                repository.syncPullFromCloud()
+            } catch (e: Exception) {
+                // Ignore if offline
+            }
+        }
+    }
 
     fun getEvidencesForCase(caseId: String): kotlinx.coroutines.flow.Flow<List<EvidenceEntity>> {
         return repository.getEvidencesForCase(caseId)
@@ -113,12 +157,10 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun triggerSync() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                // 1. Pull data from cloud
                 repository.syncPullFromCloud()
 
-                // 2. Push pending tasks to cloud immediately
                 val dao = database.evidenceDao()
                 val pendingTasks = dao.getPendingSyncTasks()
                 val firestore = FirebaseFirestore.getInstance()
@@ -132,9 +174,21 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                                 .await()
                         }
                         "CASE" -> {
-                            firestore.collection("cases").document(task.entityId)
-                                .set(mapOf("id" to task.entityId, "payload" to task.payloadJson, "syncedAt" to System.currentTimeMillis()))
-                                .await()
+                            val caseEntity = dao.getCaseById(task.entityId)
+                            if (caseEntity != null) {
+                                firestore.collection("cases").document(task.entityId)
+                                    .set(mapOf(
+                                        "id" to caseEntity.id,
+                                        "caseNumber" to caseEntity.caseNumber,
+                                        "title" to caseEntity.title,
+                                        "description" to caseEntity.description,
+                                        "investigatorId" to caseEntity.investigatorId,
+                                        "status" to caseEntity.status,
+                                        "createdAt" to caseEntity.createdAt,
+                                        "updatedAt" to caseEntity.updatedAt
+                                    ))
+                                    .await()
+                            }
                         }
                         "EVIDENCE" -> {
                             val evidence = dao.getEvidenceById(task.entityId)
@@ -143,6 +197,8 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                                     .set(mapOf(
                                         "id" to evidence.id,
                                         "caseId" to evidence.caseId,
+                                        "fileName" to evidence.fileName,
+                                        "notes" to evidence.notes,
                                         "evidenceHash" to evidence.evidenceHash,
                                         "metadataHash" to evidence.metadataHash,
                                         "fileHash" to evidence.fileHash,
