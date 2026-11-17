@@ -220,7 +220,7 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                     dao.deleteSyncTask(task.id)
                 }
             } catch (e: Exception) {
-                // Ignore sync errors if offline
+                android.util.Log.e("TriggerSync", "Error en sincronización manual: ${e.localizedMessage}", e)
             }
             SyncWorker.enqueueSync(getApplication())
         }
