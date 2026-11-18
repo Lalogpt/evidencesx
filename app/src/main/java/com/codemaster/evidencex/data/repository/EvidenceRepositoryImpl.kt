@@ -27,13 +27,14 @@ class EvidenceRepositoryImpl(
 
     val allAuditEvents: Flow<List<AuditEventEntity>> = evidenceDao.getAllAuditEvents()
 
-    suspend fun createPeritoUser(name: String, idOrEmail: String, password: String, role: String = "PERITO") {
+    suspend fun createPeritoUser(name: String, idOrEmail: String, password: String, area: String, role: String = "PERITO") {
         val userEntity = UserEntity(
             id = idOrEmail,
             name = name,
             email = idOrEmail,
             password = password,
             role = role,
+            area = area,
             synced = false
         )
 
@@ -42,7 +43,7 @@ class EvidenceRepositoryImpl(
             entityType = "USER",
             entityId = idOrEmail,
             operation = "INSERT",
-            payloadJson = "{\"userId\":\"$idOrEmail\",\"name\":\"$name\",\"email\":\"$idOrEmail\",\"password\":\"$password\",\"role\":\"$role\"}",
+            payloadJson = "{\"userId\":\"$idOrEmail\",\"name\":\"$name\",\"email\":\"$idOrEmail\",\"password\":\"$password\",\"role\":\"$role\",\"area\":\"$area\"}",
             status = "PENDING",
             createdAt = System.currentTimeMillis()
         )
@@ -58,7 +59,8 @@ class EvidenceRepositoryImpl(
         caseNumber: String,
         title: String,
         description: String,
-        investigatorId: String
+        investigatorId: String,
+        area: String
     ): String {
         val caseId = CryptoUtils.generateUuid()
         val now = System.currentTimeMillis()
@@ -68,6 +70,7 @@ class EvidenceRepositoryImpl(
             title = title,
             description = description,
             investigatorId = investigatorId,
+            area = area,
             status = "ACTIVE",
             createdAt = now,
             updatedAt = now,
@@ -76,7 +79,7 @@ class EvidenceRepositoryImpl(
 
         val latestAudit = evidenceDao.getLatestAuditEvent()
         val prevHash = latestAudit?.eventHash ?: CryptoUtils.GENESIS_HASH
-        val eventContent = "CREATE_CASE:$caseId:$caseNumber:$investigatorId:$now"
+        val eventContent = "CREATE_CASE:$caseId:$caseNumber:$investigatorId:$area:$now"
         val eventHash = CryptoUtils.calculateAuditEventHash(eventContent, prevHash)
         val auditId = CryptoUtils.generateUuid()
 
@@ -85,7 +88,7 @@ class EvidenceRepositoryImpl(
             caseId = caseId,
             evidenceId = null,
             eventType = "CREATE_CASE",
-            eventDetails = "Case created: $title ($caseNumber)",
+            eventDetails = "Case created: $title ($caseNumber) [Area: $area]",
             userId = investigatorId,
             timestamp = now,
             prevEventHash = prevHash,
@@ -98,7 +101,7 @@ class EvidenceRepositoryImpl(
             entityType = "CASE",
             entityId = caseId,
             operation = "INSERT",
-            payloadJson = "{\"caseId\":\"$caseId\",\"caseNumber\":\"$caseNumber\",\"title\":\"$title\",\"description\":\"$description\",\"investigatorId\":\"$investigatorId\",\"status\":\"ACTIVE\",\"createdAt\":$now,\"updatedAt\":$now}",
+            payloadJson = "{\"caseId\":\"$caseId\",\"caseNumber\":\"$caseNumber\",\"title\":\"$title\",\"description\":\"$description\",\"investigatorId\":\"$investigatorId\",\"area\":\"$area\",\"status\":\"ACTIVE\",\"createdAt\":$now,\"updatedAt\":$now}",
             status = "PENDING",
             createdAt = now
         )
@@ -299,9 +302,6 @@ class EvidenceRepositoryImpl(
         }
     }
 
-    /**
-     * Sincronización de bajada (Cloud-to-Local Pull): Descarga usuarios, expedientes y evidencias desde Firestore hacia Room.
-     */
     suspend fun syncPullFromCloud() {
         try {
             val firestore = FirebaseFirestore.getInstance()
@@ -315,7 +315,8 @@ class EvidenceRepositoryImpl(
                 val email = doc.getString("email") ?: extractJsonField(payload, "email") ?: id
                 val password = doc.getString("password") ?: extractJsonField(payload, "password") ?: "123456"
                 val role = doc.getString("role") ?: extractJsonField(payload, "role") ?: "PERITO"
-                val user = UserEntity(id = id, name = name, email = email, password = password, role = role, synced = true)
+                val area = doc.getString("area") ?: extractJsonField(payload, "area") ?: "General"
+                val user = UserEntity(id = id, name = name, email = email, password = password, role = role, area = area, synced = true)
                 evidenceDao.insertUser(user)
             }
 
@@ -328,6 +329,7 @@ class EvidenceRepositoryImpl(
                 val title = doc.getString("title") ?: extractJsonField(payload, "title") ?: "Expediente Nube"
                 val description = doc.getString("description") ?: extractJsonField(payload, "description") ?: ""
                 val investigatorId = doc.getString("investigatorId") ?: extractJsonField(payload, "investigatorId") ?: "PERITO-001"
+                val area = doc.getString("area") ?: extractJsonField(payload, "area") ?: "General"
                 val status = doc.getString("status") ?: extractJsonField(payload, "status") ?: "ACTIVE"
                 val createdAt = doc.getLong("createdAt") ?: extractJsonField(payload, "createdAt")?.toLongOrNull() ?: System.currentTimeMillis()
                 val updatedAt = doc.getLong("updatedAt") ?: extractJsonField(payload, "updatedAt")?.toLongOrNull() ?: createdAt
@@ -338,6 +340,7 @@ class EvidenceRepositoryImpl(
                     title = title,
                     description = description,
                     investigatorId = investigatorId,
+                    area = area,
                     status = status,
                     createdAt = createdAt,
                     updatedAt = updatedAt,

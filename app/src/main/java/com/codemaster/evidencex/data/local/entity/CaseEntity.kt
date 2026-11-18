@@ -22,6 +22,9 @@ data class CaseEntity(
     @ColumnInfo(name = "investigator_id")
     val investigatorId: String,
 
+    @ColumnInfo(name = "area")
+    val area: String, // Área pericial del expediente
+
     @ColumnInfo(name = "status")
     val status: String, // ACTIVE, CLOSED, ARCHIVED
 

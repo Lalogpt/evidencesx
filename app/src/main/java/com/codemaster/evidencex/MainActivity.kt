@@ -164,10 +164,13 @@ fun contextSafe(context: android.content.Context) = context
 fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) {
     val cases by viewModel.cases.collectAsState()
     val users by viewModel.users.collectAsState()
-    val isAdmin by viewModel.isAdmin.collectAsState()
+    val currentUserRole by viewModel.currentUserRole.collectAsState()
+    val currentArea by viewModel.currentArea.collectAsState()
     val currentUserId by viewModel.currentUserId.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+
+    val isAdmin = currentUserRole == "SUPER_ADMIN" || currentUserRole == "ADMIN_AREA"
 
     val filteredCases = remember(cases, searchQuery, users) {
         if (searchQuery.isBlank()) cases
@@ -183,6 +186,7 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                 case.title.contains(searchQuery, ignoreCase = true) ||
                 case.description.contains(searchQuery, ignoreCase = true) ||
                 case.investigatorId.contains(searchQuery, ignoreCase = true) ||
+                case.area.contains(searchQuery, ignoreCase = true) ||
                 matchingUserIds.any { case.investigatorId.equals(it, ignoreCase = true) }
             }
         }
@@ -195,7 +199,11 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                     Column {
                         Text("EVIDENCE X - Cadena de Custodia", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Text(
-                            text = if (isAdmin) "Modo: Administrador (Control Total)" else "Modo: Perito ($currentUserId)",
+                            text = when (currentUserRole) {
+                                "SUPER_ADMIN" -> "Modo: Super Administrador (Todas las Áreas)"
+                                "ADMIN_AREA" -> "Modo: Admin de Área ($currentArea)"
+                                else -> "Modo: Perito ($currentUserId)"
+                            },
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                         )
@@ -242,7 +250,7 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                label = { Text("Buscar expediente, título o perito...") },
+                label = { Text("Buscar por expediente, título, perito o área...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -271,9 +279,10 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                 if (showCreateDialog) {
                     CreateCaseDialog(
                         defaultInvestigatorId = currentUserId,
+                        defaultArea = currentArea,
                         onDismiss = { showCreateDialog = false },
-                        onCreate = { number, title, desc, inv ->
-                            viewModel.createCase(number, title, desc, inv)
+                        onCreate = { number, title, desc, inv, area ->
+                            viewModel.createCase(number, title, desc, inv, area)
                             showCreateDialog = false
                         }
                     )
@@ -367,12 +376,12 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Exp: ${case.caseNumber}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Text("👤 Perito: ${case.investigatorId}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.DarkGray)
+                Text("📁 Área: ${case.area}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.secondary)
             }
             Spacer(modifier = Modifier.height(2.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(case.title, style = MaterialTheme.typography.titleMedium)
-                Text("🕒 ${formatTimestamp(case.createdAt)}", fontSize = 10.sp, color = Color.Gray)
+                Text("👤 ${case.investigatorId}", fontSize = 11.sp, color = Color.DarkGray)
             }
             Text(case.description, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
             Spacer(modifier = Modifier.height(4.dp))
@@ -534,11 +543,12 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
 }
 
 @Composable
-fun CreateCaseDialog(defaultInvestigatorId: String, onDismiss: () -> Unit, onCreate: (String, String, String, String) -> Unit) {
+fun CreateCaseDialog(defaultInvestigatorId: String, defaultArea: String, onDismiss: () -> Unit, onCreate: (String, String, String, String, String) -> Unit) {
     var caseNumber by remember { mutableStateOf("EXP-2026-002") }
     var title by remember { mutableStateOf("Investigación de Campo") }
     var description by remember { mutableStateOf("Toma de evidencias en sitio.") }
     var investigatorId by remember { mutableStateOf(defaultInvestigatorId) }
+    var area by remember { mutableStateOf(defaultArea) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -552,10 +562,12 @@ fun CreateCaseDialog(defaultInvestigatorId: String, onDismiss: () -> Unit, onCre
                 OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Descripción") })
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(value = investigatorId, onValueChange = { investigatorId = it }, label = { Text("ID Perito Asignado") })
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(value = area, onValueChange = { area = it }, label = { Text("Área Pericial") })
             }
         },
         confirmButton = {
-            Button(onClick = { onCreate(caseNumber, title, description, investigatorId) }) {
+            Button(onClick = { onCreate(caseNumber, title, description, investigatorId, area) }) {
                 Text("Crear y Registrar")
             }
         },
@@ -575,11 +587,7 @@ fun AuditLogScreen(viewModel: EvidenceViewModel) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text("Bitácora y Cadena de Custodia", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    }
-                },
+                title = { Text("Bitácora y Cadena de Custodia") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onSecondaryContainer

@@ -8,7 +8,7 @@ import androidx.room.PrimaryKey
 data class UserEntity(
     @PrimaryKey
     @ColumnInfo(name = "id")
-    val id: String, // PERITO-007 or Email
+    val id: String, // ID o Email
 
     @ColumnInfo(name = "name")
     val name: String,
@@ -17,10 +17,13 @@ data class UserEntity(
     val email: String,
 
     @ColumnInfo(name = "password")
-    val password: String, // Password for local offline login
+    val password: String,
 
     @ColumnInfo(name = "role")
-    val role: String, // ADMIN or PERITO
+    val role: String, // SUPER_ADMIN, ADMIN_AREA, PERITO
+
+    @ColumnInfo(name = "area")
+    val area: String, // e.g. "Balística", "Informática", "Dactiloscopia", "General"
 
     @ColumnInfo(name = "synced")
     val synced: Boolean = false

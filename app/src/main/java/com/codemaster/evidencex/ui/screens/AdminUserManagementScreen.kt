@@ -21,13 +21,12 @@ import java.util.Locale
 fun AdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val users by viewModel.users.collectAsState()
+    val currentArea by viewModel.currentArea.collectAsState()
 
     var peritoName by remember { mutableStateOf("") }
-    // Auto-suggest next unique ID based on existing users count
     var peritoId by remember { mutableStateOf("") }
     var peritoPassword by remember { mutableStateOf("123456") }
 
-    // Update suggested ID when users list changes if peritoId is empty
     LaunchedEffect(users) {
         if (peritoId.isEmpty()) {
             val nextNum = users.size + 1
@@ -38,7 +37,7 @@ fun AdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> Unit) 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Gestión de Cuentas de Peritos") },
+                title = { Text("Gestión de Peritos - Área: $currentArea") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -47,7 +46,7 @@ fun AdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> Unit) 
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
-            Text("Crear Cuenta de Perito con ID Único", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            Text("Crear Perito para el Área: $currentArea", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
 
             OutlinedTextField(
@@ -83,18 +82,16 @@ fun AdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> Unit) 
                         return@Button
                     }
 
-                    // Check for duplicate ID in existing users
                     val exists = users.any { it.id.equals(trimmedId, ignoreCase = true) }
                     if (exists) {
-                        Toast.makeText(context, "⚠️ El ID '$trimmedId' ya existe. Por favor use un ID único.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "⚠️ El ID '$trimmedId' ya existe. Use un ID único.", Toast.LENGTH_LONG).show()
                         return@Button
                     }
 
-                    viewModel.createPeritoUser(peritoName, trimmedId, peritoPassword.trim())
-                    Toast.makeText(context, "Perito $trimmedId creado con éxito.", Toast.LENGTH_LONG).show()
+                    viewModel.createPeritoUser(peritoName, trimmedId, peritoPassword.trim(), currentArea)
+                    Toast.makeText(context, "Perito $trimmedId creado para el área $currentArea.", Toast.LENGTH_LONG).show()
                     peritoName = ""
                     peritoPassword = "123456"
-                    // Suggest next ID
                     val nextNum = users.size + 2
                     peritoId = String.format(Locale.US, "PERITO-%03d", nextNum)
                 },
@@ -102,19 +99,19 @@ fun AdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> Unit) 
             ) {
                 Icon(Icons.Default.PersonAdd, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Registrar Perito Único")
+                Text("Registrar Perito en $currentArea")
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-            Text("Peritos Registrados en el Sistema:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            Text("Peritos en el Área ($currentArea):", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
 
             LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                items(users) { user ->
+                items(users.filter { it.role == "PERITO" }) { user ->
                     Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                         ListItem(
                             headlineContent = { Text("${user.name} (ID: ${user.id})", fontWeight = FontWeight.SemiBold) },
-                            supportingContent = { Text("Rol: ${user.role} | Contraseña: ${user.password}") }
+                            supportingContent = { Text("Área: ${user.area} | Contraseña: ${user.password}") }
                         )
                     }
                 }

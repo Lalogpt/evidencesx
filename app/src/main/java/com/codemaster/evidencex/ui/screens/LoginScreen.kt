@@ -24,8 +24,8 @@ fun LoginScreen(
     viewModel: EvidenceViewModel,
     onLoginSuccess: (isAdmin: Boolean, userId: String) -> Unit
 ) {
-    var email by remember { mutableStateOf("PERITO-007") }
-    var password by remember { mutableStateOf("123456") }
+    var email by remember { mutableStateOf("superadmin@evidencex.com") }
+    var password by remember { mutableStateOf("super123") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -48,14 +48,14 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text("EVIDENCE X", fontWeight = FontWeight.Bold, fontSize = 28.sp, color = MaterialTheme.colorScheme.primary)
-            Text("Sistema Forense Offline-First", fontSize = 14.sp, color = MaterialTheme.colorScheme.secondary)
+            Text("Sistema Forense Multi-Área", fontSize = 14.sp, color = MaterialTheme.colorScheme.secondary)
 
             Spacer(modifier = Modifier.height(32.dp))
 
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("ID de Perito o Correo (ej. PERITO-007)") },
+                label = { Text("Correo o ID (ej. superadmin@evidencex.com)") },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -86,25 +86,18 @@ fun LoginScreen(
                     errorMessage = null
 
                     scope.launch {
-                        // 1. Check local Room database first (Offline-First authentication for created Peritos & Admin)
+                        // 1. Authenticate against local Room database (Offline-First hierarchy)
                         val localUser = viewModel.authenticateLocalUser(email.trim(), password.trim())
                         if (localUser != null) {
                             isLoading = false
-                            val isAdmin = localUser.role.equals("ADMIN", ignoreCase = true)
-                            viewModel.setUserRole(isAdmin, localUser.id)
+                            val role = localUser.role // SUPER_ADMIN, ADMIN_AREA, PERITO
+                            val isAdmin = role == "SUPER_ADMIN" || role == "ADMIN_AREA"
+                            viewModel.setUserCredentials(role, localUser.id, localUser.area)
                             onLoginSuccess(isAdmin, localUser.id)
                             return@launch
                         }
 
-                        // 2. Hardcoded fallback admin test account
-                        if (email.trim().equals("admin@evidencex.com", ignoreCase = true) && password == "admin123") {
-                            isLoading = false
-                            viewModel.setUserRole(true, "ADMIN-01")
-                            onLoginSuccess(true, "ADMIN-01")
-                            return@launch
-                        }
-
-                        // 3. Fallback to Firebase Authentication online
+                        // 2. Fallback to Firebase Authentication online
                         val auth = FirebaseAuth.getInstance()
                         auth.signInWithEmailAndPassword(email.trim(), password)
                             .addOnCompleteListener { task ->
@@ -112,9 +105,10 @@ fun LoginScreen(
                                 if (task.isSuccessful) {
                                     val user = auth.currentUser
                                     val userId = user?.email ?: email
-                                    val isAdmin = userId.contains("admin", ignoreCase = true)
-                                    viewModel.setUserRole(isAdmin, userId)
-                                    onLoginSuccess(isAdmin, userId)
+                                    val role = if (userId.contains("super", ignoreCase = true)) "SUPER_ADMIN" else if (userId.contains("admin", ignoreCase = true)) "ADMIN_AREA" else "PERITO"
+                                    val area = if (userId.contains("balistica", ignoreCase = true)) "Balística" else if (userId.contains("informatica", ignoreCase = true)) "Informática" else if (userId.contains("dactilo", ignoreCase = true)) "Dactiloscopia" else "General"
+                                    viewModel.setUserCredentials(role, userId, area)
+                                    onLoginSuccess(role != "PERITO", userId)
                                 } else {
                                     errorMessage = "Credenciales incorrectas o usuario no registrado."
                                 }
@@ -127,7 +121,7 @@ fun LoginScreen(
                 if (isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
                 } else {
-                    Text("Iniciar Sesión (Local / Firebase)")
+                    Text("Iniciar Sesión (Jerárquico)")
                 }
             }
         }

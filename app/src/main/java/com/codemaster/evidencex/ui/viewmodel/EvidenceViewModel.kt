@@ -29,84 +29,106 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
 
     init {
         startRealtimeSync()
+        seedDefaultAdmins()
     }
 
-    // Role management: ADMIN can view all cases; PERITO only views their own.
-    private val _isAdmin = MutableStateFlow(true)
-    val isAdmin: StateFlow<Boolean> = _isAdmin
+    // Role management: SUPER_ADMIN (sees all), ADMIN_AREA (sees own area), PERITO (sees own cases)
+    private val _currentUserRole = MutableStateFlow("SUPER_ADMIN")
+    val currentUserRole: StateFlow<String> = _currentUserRole
 
-    private val _currentUserId = MutableStateFlow("ADMIN-01")
+    private val _currentUserId = MutableStateFlow("SUPER-01")
     val currentUserId: StateFlow<String> = _currentUserId
 
-    val users: StateFlow<List<UserEntity>> = repository.allUsers
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _currentArea = MutableStateFlow("General")
+    val currentArea: StateFlow<String> = _currentArea
+
+    val users: StateFlow<List<UserEntity>> = combine(
+        repository.allUsers,
+        _currentUserRole,
+        _currentArea,
+        _currentUserId
+    ) { allUsers, role, area, userId ->
+        when (role) {
+            "SUPER_ADMIN" -> allUsers
+            "ADMIN_AREA" -> allUsers.filter { it.area.equals(area, ignoreCase = true) || it.id.equals(userId, ignoreCase = true) }
+            else -> allUsers.filter { it.id.equals(userId, ignoreCase = true) }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val cases: StateFlow<List<CaseEntity>> = combine(
         repository.allCases,
-        _isAdmin,
+        _currentUserRole,
+        _currentArea,
         _currentUserId
-    ) { allCases, admin, userId ->
-        if (admin) {
-            allCases
-        } else {
-            allCases.filter { it.investigatorId.equals(userId, ignoreCase = true) }
+    ) { allCases, role, area, userId ->
+        when (role) {
+            "SUPER_ADMIN" -> allCases
+            "ADMIN_AREA" -> allCases.filter { it.area.equals(area, ignoreCase = true) }
+            else -> allCases.filter { it.investigatorId.equals(userId, ignoreCase = true) }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val auditEvents: StateFlow<List<AuditEventEntity>> = repository.allAuditEvents
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private fun seedDefaultAdmins() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // If no users, seed super admin and 3 area admins
+                val defaultAdmins = listOf(
+                    UserEntity("superadmin@evidencex.com", "Super Administrador", "superadmin@evidencex.com", "super123", "SUPER_ADMIN", "General", true),
+                    UserEntity("admin.balistica@evidencex.com", "Admin Balística", "admin.balistica@evidencex.com", "balistica123", "ADMIN_AREA", "Balística", true),
+                    UserEntity("admin.informatica@evidencex.com", "Admin Informática", "admin.informatica@evidencex.com", "informatica123", "ADMIN_AREA", "Informática", true),
+                    UserEntity("admin.dactilo@evidencex.com", "Admin Dactiloscopia", "admin.dactilo@evidencex.com", "dactilo123", "ADMIN_AREA", "Dactiloscopia", true)
+                )
+                for (admin in defaultAdmins) {
+                    repository.createPeritoUser(admin.name, admin.id, admin.password, admin.area, admin.role)
+                }
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }
+
     private fun startRealtimeSync() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val firestore = FirebaseFirestore.getInstance()
 
-                // Real-time listener for cases
                 firestore.collection("cases").addSnapshotListener { snapshot, _ ->
                     if (snapshot != null) {
                         viewModelScope.launch(Dispatchers.IO) {
                             try {
                                 repository.syncPullFromCloud()
-                            } catch (e: Exception) {
-                                // Ignore
-                            }
+                            } catch (e: Exception) {}
                         }
                     }
                 }
 
-                // Real-time listener for evidences
                 firestore.collection("evidences").addSnapshotListener { snapshot, _ ->
                     if (snapshot != null) {
                         viewModelScope.launch(Dispatchers.IO) {
                             try {
                                 repository.syncPullFromCloud()
-                            } catch (e: Exception) {
-                                // Ignore
-                            }
+                            } catch (e: Exception) {}
                         }
                     }
                 }
 
-                // Initial pull sync on startup
                 repository.syncPullFromCloud()
-            } catch (e: Exception) {
-                // Ignore if offline
-            }
+            } catch (e: Exception) {}
         }
     }
 
-    fun getEvidencesForCase(caseId: String): kotlinx.coroutines.flow.Flow<List<EvidenceEntity>> {
-        return repository.getEvidencesForCase(caseId)
-    }
-
-    fun setUserRole(isAdminMode: Boolean, userId: String) {
-        _isAdmin.value = isAdminMode
+    fun setUserCredentials(role: String, userId: String, area: String) {
+        _currentUserRole.value = role
         _currentUserId.value = userId
+        _currentArea.value = area
     }
 
-    fun createPeritoUser(name: String, idOrEmail: String, password: String) {
+    fun createPeritoUser(name: String, idOrEmail: String, password: String, area: String) {
         viewModelScope.launch {
-            repository.createPeritoUser(name, idOrEmail, password, "PERITO")
+            repository.createPeritoUser(name, idOrEmail, password, area, "PERITO")
             triggerSync()
         }
     }
@@ -115,9 +137,9 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
         return repository.authenticateLocalUser(identifier, password)
     }
 
-    fun createCase(caseNumber: String, title: String, description: String, investigatorId: String) {
+    fun createCase(caseNumber: String, title: String, description: String, investigatorId: String, area: String) {
         viewModelScope.launch {
-            repository.createCase(caseNumber, title, description, investigatorId)
+            repository.createCase(caseNumber, title, description, investigatorId, area)
             triggerSync()
         }
     }
@@ -134,6 +156,10 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
             repository.deleteCase(caseId, adminUserId)
             triggerSync()
         }
+    }
+
+    fun getEvidencesForCase(caseId: String): kotlinx.coroutines.flow.Flow<List<EvidenceEntity>> {
+        return repository.getEvidencesForCase(caseId)
     }
 
     fun captureEvidence(
@@ -183,6 +209,7 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                                         "title" to caseEntity.title,
                                         "description" to caseEntity.description,
                                         "investigatorId" to caseEntity.investigatorId,
+                                        "area" to caseEntity.area,
                                         "status" to caseEntity.status,
                                         "createdAt" to caseEntity.createdAt,
                                         "updatedAt" to caseEntity.updatedAt
