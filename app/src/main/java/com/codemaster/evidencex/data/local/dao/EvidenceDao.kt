@@ -42,6 +42,9 @@ interface EvidenceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUser(userEntity: UserEntity)
 
+    @Query("DELETE FROM user_entity WHERE id = :userId")
+    suspend fun deleteUserById(userId: String)
+
     // --- Evidences ---
     @Query("SELECT * FROM evidence_entity WHERE case_id = :caseId ORDER BY timestamp DESC")
     fun getEvidencesForCase(caseId: String): Flow<List<EvidenceEntity>>
@@ -82,6 +85,15 @@ interface EvidenceDao {
         syncTaskEntity: SyncTaskEntity
     ) {
         insertUser(userEntity)
+        insertSyncTask(syncTaskEntity)
+    }
+
+    @Transaction
+    suspend fun deleteUserAtomically(
+        userId: String,
+        syncTaskEntity: SyncTaskEntity
+    ) {
+        deleteUserById(userId)
         insertSyncTask(syncTaskEntity)
     }
 

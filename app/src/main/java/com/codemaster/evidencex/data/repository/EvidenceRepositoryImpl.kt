@@ -55,6 +55,19 @@ class EvidenceRepositoryImpl(
         return evidenceDao.getUserByCredentials(identifier, password)
     }
 
+    suspend fun deleteUser(userId: String) {
+        val syncTask = SyncTaskEntity(
+            id = CryptoUtils.generateUuid(),
+            entityType = "USER",
+            entityId = userId,
+            operation = "DELETE",
+            payloadJson = "{\"userId\":\"$userId\"}",
+            status = "PENDING",
+            createdAt = System.currentTimeMillis()
+        )
+        evidenceDao.deleteUserAtomically(userId, syncTask)
+    }
+
     suspend fun createCase(
         caseNumber: String,
         title: String,

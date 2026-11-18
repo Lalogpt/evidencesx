@@ -133,6 +133,20 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun createAreaAdminUser(name: String, idOrEmail: String, password: String, area: String) {
+        viewModelScope.launch {
+            repository.createPeritoUser(name, idOrEmail, password, area, "ADMIN_AREA")
+            triggerSync()
+        }
+    }
+
+    fun deleteUser(userId: String) {
+        viewModelScope.launch {
+            repository.deleteUser(userId)
+            triggerSync()
+        }
+    }
+
     suspend fun authenticateLocalUser(identifier: String, password: String): UserEntity? {
         return repository.authenticateLocalUser(identifier, password)
     }

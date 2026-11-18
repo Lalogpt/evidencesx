@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -118,6 +119,9 @@ fun EvidenceXAppNavHost(viewModel: EvidenceViewModel = viewModel()) {
         composable("admin_users") {
             AdminUserManagementScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
         }
+        composable("super_admin_users") {
+            SuperAdminUserManagementScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+        }
         composable("audit_log") {
             AuditLogScreen(viewModel = viewModel)
         }
@@ -171,6 +175,7 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
     var searchQuery by remember { mutableStateOf("") }
 
     val isAdmin = currentUserRole == "SUPER_ADMIN" || currentUserRole == "ADMIN_AREA"
+    val isSuperAdmin = currentUserRole == "SUPER_ADMIN"
 
     val filteredCases = remember(cases, searchQuery, users) {
         if (searchQuery.isBlank()) cases
@@ -210,7 +215,11 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                     }
                 },
                 actions = {
-                    if (isAdmin) {
+                    if (isSuperAdmin) {
+                        IconButton(onClick = { navController.navigate("super_admin_users") }) {
+                            Icon(Icons.Default.AdminPanelSettings, contentDescription = "Gestionar Admins de Área")
+                        }
+                    } else if (isAdmin) {
                         IconButton(onClick = { navController.navigate("admin_users") }) {
                             Icon(Icons.Default.PersonAdd, contentDescription = "Gestionar Peritos")
                         }
@@ -587,7 +596,11 @@ fun AuditLogScreen(viewModel: EvidenceViewModel) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Bitácora y Cadena de Custodia") },
+                title = {
+                    Column {
+                        Text("Bitácora y Cadena de Custodia", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onSecondaryContainer
