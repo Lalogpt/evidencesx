@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,6 +24,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
@@ -33,6 +36,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,8 +56,10 @@ import com.codemaster.evidencex.data.local.entity.EvidenceEntity
 import com.codemaster.evidencex.ui.screens.*
 import com.codemaster.evidencex.ui.theme.EVIDENCEXTheme
 import com.codemaster.evidencex.ui.viewmodel.EvidenceViewModel
+import com.codemaster.evidencex.util.QrCodeGenerator
 import com.google.android.gms.location.LocationServices
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -149,7 +156,7 @@ fun EvidenceXAppNavHost(viewModel: EvidenceViewModel = viewModel()) {
                             investigatorId = currentUserId,
                             sensitive = sensitive
                         )
-                        Toast.makeText(contextSafe(navController.context), "Evidencia guardada exitosamente", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(contextSafe(navController.context), "Evidencia guardada y Cédula QR generada", Toast.LENGTH_SHORT).show()
                     } catch (e: Exception) {
                         Toast.makeText(contextSafe(navController.context), "Error al guardar evidencia: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
                     }
@@ -172,6 +179,7 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
     val currentArea by viewModel.currentArea.collectAsState()
     val currentUserId by viewModel.currentUserId.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showQrScannerDialog by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
     val isAdmin = currentUserRole == "SUPER_ADMIN" || currentUserRole == "ADMIN_AREA"
@@ -215,6 +223,9 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showQrScannerDialog = true }) {
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = "Escanear Cédula QR Forense")
+                    }
                     if (isSuperAdmin) {
                         IconButton(onClick = { navController.navigate("super_admin_users") }) {
                             Icon(Icons.Default.AdminPanelSettings, contentDescription = "Gestionar Admins de Área")
@@ -296,9 +307,118 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                         }
                     )
                 }
+
+                if (showQrScannerDialog) {
+                    QrScannerDialog(viewModel = viewModel, onDismiss = { showQrScannerDialog = false })
+                }
             }
         }
     }
+}
+
+@Composable
+fun EvidenceQrDialog(evidence: EvidenceEntity, onDismiss: () -> Unit) {
+    val qrBitmap = remember {
+        QrCodeGenerator.generateQrBitmap("EVIDENCE_X_REF:${evidence.id}:${evidence.evidenceHash}")
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Cédula QR Forense") },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Text("ID: ${evidence.id}", fontSize = 10.sp, color = Color.Gray)
+                Spacer(modifier = Modifier.height(8.dp))
+                Image(
+                    bitmap = qrBitmap.asImageBitmap(),
+                    contentDescription = "Código QR de Evidencia",
+                    modifier = Modifier.size(200.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Hash: ${evidence.evidenceHash.take(24)}...", fontSize = 10.sp, color = Color.DarkGray)
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("Cerrar")
+            }
+        }
+    )
+}
+
+@Composable
+fun QrScannerDialog(viewModel: EvidenceViewModel, onDismiss: () -> Unit) {
+    var scannedInput by remember { mutableStateOf("") }
+    var resultMessage by remember { mutableStateOf<String?>(null) }
+    var isError by remember { mutableStateOf(false) }
+    val currentUserRole by viewModel.currentUserRole.collectAsState()
+    val currentArea by viewModel.currentArea.collectAsState()
+    val scope = rememberCoroutineScope()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Escanear / Validar Cédula QR Forense") },
+        text = {
+            Column {
+                Text("Ingrese o simule el escaneo del ID de la Evidencia:", fontSize = 12.sp, color = Color.Gray)
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = scannedInput,
+                    onValueChange = { scannedInput = it },
+                    label = { Text("ID de Evidencia (UUID)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (resultMessage != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        resultMessage!!,
+                        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val queryId = scannedInput.trim()
+                if (queryId.isBlank()) {
+                    resultMessage = "Ingrese un ID válido."
+                    isError = true
+                    return@Button
+                }
+                scope.launch {
+                    val (evidence, case) = viewModel.getEvidenceAndCaseDetails(queryId)
+                    if (evidence == null || case == null) {
+                        resultMessage = "❌ Evidencia no encontrada en el sistema."
+                        isError = true
+                        return@launch
+                    }
+
+                    // Cross-Department RBAC Validation
+                    val hasAccess = when (currentUserRole) {
+                        "SUPER_ADMIN" -> true
+                        "ADMIN_AREA" -> case.area.equals(currentArea, ignoreCase = true)
+                        else -> case.investigatorId.equals(viewModel.currentUserId.value, ignoreCase = true)
+                    }
+
+                    if (!hasAccess) {
+                        isError = true
+                        resultMessage = "⚠️ Acceso Denegado por Jurisdicción de Área:\n\nEsta evidencia pertenece al departamento de [${case.area}]. No corresponde a su área actual [$currentArea]. Por favor, acuda con el responsable a cargo."
+                    } else {
+                        isError = false
+                        resultMessage = "✅ Acceso Concedido:\nExpediente: ${case.caseNumber} [Área: ${case.area}]\nInvestigador: ${case.investigatorId}"
+                    }
+                }
+            }) {
+                Text("Validar Jurisdicción")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cerrar")
+            }
+        }
+    )
 }
 
 @Composable
@@ -306,6 +426,7 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
     var expanded by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showQrDialogForEvidence by remember { mutableStateOf<EvidenceEntity?>(null) }
     var isSensitiveEvidence by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val evidences by remember(case.id) {
@@ -321,17 +442,17 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                     val lng = location?.longitude ?: -99.1332
                     try {
                         viewModel.captureEvidence(case.id, sourceFile, fileName, if (sensitive) "EVIDENCIA SENSIBLE / CLASIFICADA" else "Evidencia multimedia", lat, lng, currentUserId, sensitive)
-                        Toast.makeText(context, "Evidencia guardada con GPS ($lat, $lng)", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Evidencia guardada y Cédula QR generada", Toast.LENGTH_SHORT).show()
                     } catch (e: Exception) {
                         Toast.makeText(context, "Error interno al guardar: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
                     }
                 }.addOnFailureListener {
                     viewModel.captureEvidence(case.id, sourceFile, fileName, "Evidencia multimedia", 19.4326, -99.1332, currentUserId, sensitive)
-                    Toast.makeText(context, "Evidencia guardada", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Evidencia guardada y Cédula QR generada", Toast.LENGTH_SHORT).show()
                 }
             } else {
                 viewModel.captureEvidence(case.id, sourceFile, fileName, "Evidencia multimedia", 19.4326, -99.1332, currentUserId, sensitive)
-                Toast.makeText(context, "Evidencia guardada", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Evidencia guardada y Cédula QR generada", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
             Toast.makeText(context, "Error al guardar evidencia: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
@@ -436,8 +557,14 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                             Column(modifier = Modifier.padding(8.dp)) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text("📄 Ref: ${ev.fileName}", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                                    if (ev.sensitive) {
-                                        Text("⚠️ SENSIBLE", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (ev.sensitive) {
+                                            Text("⚠️ SENSIBLE", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                        }
+                                        TextButton(onClick = { showQrDialogForEvidence = ev }, contentPadding = PaddingValues(0.dp)) {
+                                            Icon(Icons.Default.QrCode, contentDescription = "Ver Cédula QR", modifier = Modifier.size(18.dp))
+                                        }
                                     }
                                 }
                                 Text("📍 GPS: Lat ${String.format(Locale.US, "%.4f", ev.gpsLat)}, Lng ${String.format(Locale.US, "%.4f", ev.gpsLng)}", fontSize = 11.sp, color = Color.DarkGray)
@@ -597,6 +724,10 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                 }
             }
         )
+    }
+
+    if (showQrDialogForEvidence != null) {
+        EvidenceQrDialog(evidence = showQrDialogForEvidence!!, onDismiss = { showQrDialogForEvidence = null })
     }
 }
 

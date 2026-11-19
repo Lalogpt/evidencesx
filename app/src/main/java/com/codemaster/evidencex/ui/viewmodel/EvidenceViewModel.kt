@@ -120,6 +120,13 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    suspend fun getEvidenceAndCaseDetails(evidenceId: String): Pair<EvidenceEntity?, CaseEntity?> {
+        val dao = database.evidenceDao()
+        val evidence = dao.getEvidenceById(evidenceId)
+        val case = if (evidence != null) dao.getCaseById(evidence.caseId) else null
+        return Pair(evidence, case)
+    }
+
     fun setUserCredentials(role: String, userId: String, area: String) {
         _currentUserRole.value = role
         _currentUserId.value = userId
