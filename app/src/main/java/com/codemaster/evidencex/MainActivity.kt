@@ -305,6 +305,7 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
 fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavController, isAdmin: Boolean, currentUserId: String) {
     var expanded by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var isSensitiveEvidence by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val evidences by remember(case.id) {
@@ -450,86 +451,109 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // Action Buttons: Camera Capture, 20s Video Recording, Gallery Upload
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Button(onClick = {
-                            navController.navigate("camera_capture/${case.id}")
-                        }) {
-                            Icon(Icons.Default.CameraAlt, contentDescription = null)
+                    // Action Buttons: Camera Capture, 20s Video Recording, Gallery Upload (Equally weighted without overflow)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Button(
+                            onClick = { navController.navigate("camera_capture/${case.id}") },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp)
+                        ) {
+                            Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(2.dp))
-                            Text("Cámara", fontSize = 12.sp)
+                            Text("Cámara", fontSize = 11.sp)
                         }
 
-                        Button(onClick = {
-                            val intent = Intent(MediaStore.ACTION_VIDEO_CAPTURE).apply {
-                                putExtra(MediaStore.EXTRA_DURATION_LIMIT, 20) // Max 20 seconds recording
-                                putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 1)
-                            }
-                            videoRecordLauncher.launch(intent)
-                        }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)) {
-                            Icon(Icons.Default.Videocam, contentDescription = null)
+                        Button(
+                            onClick = {
+                                val intent = Intent(MediaStore.ACTION_VIDEO_CAPTURE).apply {
+                                    putExtra(MediaStore.EXTRA_DURATION_LIMIT, 20)
+                                    putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 1)
+                                }
+                                videoRecordLauncher.launch(intent)
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(2.dp))
-                            Text("Video 20s", fontSize = 12.sp)
+                            Text("Video 20s", fontSize = 11.sp)
                         }
 
-                        Button(onClick = {
-                            galleryLauncher.launch("*/*") // Pick photo or video from gallery
-                        }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) {
-                            Text("Galería", fontSize = 12.sp)
+                        Button(
+                            onClick = { galleryLauncher.launch("*/*") },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp)
+                        ) {
+                            Text("Galería", fontSize = 11.sp)
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        OutlinedButton(onClick = {
-                            val auditEvents = viewModel.auditEvents.value
-                            val pdfFile = viewModel.generatePdfReport(case, evidences, auditEvents)
-                            try {
-                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pdfFile)
-                                val intent = Intent(Intent.ACTION_VIEW).apply {
-                                    setDataAndType(uri, "application/pdf")
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    // Row 2: Reports (PDF, .EVX)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                val auditEvents = viewModel.auditEvents.value
+                                val pdfFile = viewModel.generatePdfReport(case, evidences, auditEvents)
+                                try {
+                                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pdfFile)
+                                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(uri, "application/pdf")
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "PDF Guardado: ${pdfFile.absolutePath}", Toast.LENGTH_LONG).show()
                                 }
-                                context.startActivity(intent)
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "PDF Guardado: ${pdfFile.absolutePath}", Toast.LENGTH_LONG).show()
-                            }
-                        }) {
-                            Icon(Icons.Default.Share, contentDescription = null)
+                            },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("PDF")
+                            Text("PDF", fontSize = 12.sp)
                         }
 
-                        OutlinedButton(onClick = {
-                            val evxFile = ForensicPackageExporter.exportForensicPackage(context, case, evidences, emptyList())
-                            Toast.makeText(context, "Paquete .EVX Exportado: ${evxFile.name}", Toast.LENGTH_LONG).show()
-                        }) {
-                            Text("Exportar .EVX")
+                        OutlinedButton(
+                            onClick = {
+                                val evxFile = ForensicPackageExporter.exportForensicPackage(context, case, evidences, emptyList())
+                                Toast.makeText(context, "Paquete .EVX Exportado: ${evxFile.name}", Toast.LENGTH_LONG).show()
+                            },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
+                        ) {
+                            Text("Exportar .EVX", fontSize = 11.sp)
                         }
                     }
 
                     if (isAdmin) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        // Row 3: Admin Actions (Edit, Delete) with confirmation
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Button(
                                 onClick = { showEditDialog = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
                             ) {
-                                Icon(Icons.Default.Edit, contentDescription = null)
-                                Text("Editar (Admin)")
+                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Editar", fontSize = 12.sp)
                             }
 
                             Button(
-                                onClick = {
-                                    viewModel.deleteCase(case.id, currentUserId)
-                                    Toast.makeText(context, "Expediente eliminado y auditado", Toast.LENGTH_SHORT).show()
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                                onClick = { showDeleteConfirmDialog = true },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
                             ) {
-                                Icon(Icons.Default.Delete, contentDescription = null)
-                                Text("Eliminar (Admin)")
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Eliminar", fontSize = 12.sp)
                             }
                         }
                     }
@@ -549,6 +573,31 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
             }
         )
     }
+
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Confirmar Eliminación") },
+            text = { Text("¿Deseas eliminar permanentemente este expediente? Esta acción quedará registrada en la bitácora de auditoría.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        viewModel.deleteCase(case.id, currentUserId)
+                        Toast.makeText(context, "Expediente eliminado y auditado", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Sí, Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -563,16 +612,16 @@ fun CreateCaseDialog(defaultInvestigatorId: String, defaultArea: String, onDismi
         onDismissRequest = onDismiss,
         title = { Text("Nuevo Expediente Offline-First") },
         text = {
-            Column {
-                OutlinedTextField(value = caseNumber, onValueChange = { caseNumber = it }, label = { Text("Número de Expediente") })
+            Column(modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { /* dummy */ }, modifier = Modifier.fillMaxWidth()) { Text("Área: $area") }
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Título") })
+                OutlinedTextField(value = caseNumber, onValueChange = { caseNumber = it }, label = { Text("Número de Expediente") }, modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Descripción") })
+                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Título") }, modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(value = investigatorId, onValueChange = { investigatorId = it }, label = { Text("ID Perito Asignado") })
+                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Descripción") }, modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(value = area, onValueChange = { area = it }, label = { Text("Área Pericial") })
+                OutlinedTextField(value = investigatorId, onValueChange = { investigatorId = it }, label = { Text("ID Perito Asignado") }, modifier = Modifier.fillMaxWidth())
             }
         },
         confirmButton = {

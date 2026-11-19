@@ -24,8 +24,9 @@ fun LoginScreen(
     viewModel: EvidenceViewModel,
     onLoginSuccess: (isAdmin: Boolean, userId: String) -> Unit
 ) {
-    var email by remember { mutableStateOf("superadmin@evidencex.com") }
-    var password by remember { mutableStateOf("super123") }
+    // Security: Empty by default so credentials are never pre-filled on fresh install
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -55,7 +56,9 @@ fun LoginScreen(
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("Correo o ID (ej. superadmin@evidencex.com)") },
+                label = { Text("Correo o ID de Usuario") },
+                placeholder = { Text("ej. superadmin@evidencex.com o PERITO-001") },
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -66,6 +69,7 @@ fun LoginScreen(
                 onValueChange = { password = it },
                 label = { Text("Contraseña") },
                 visualTransformation = PasswordVisualTransformation(),
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -78,7 +82,9 @@ fun LoginScreen(
 
             Button(
                 onClick = {
-                    if (email.isBlank() || password.isBlank()) {
+                    val trimmedEmail = email.trim()
+                    val trimmedPass = password.trim()
+                    if (trimmedEmail.isBlank() || trimmedPass.isBlank()) {
                         errorMessage = "Por favor ingrese usuario y contraseña."
                         return@Button
                     }
@@ -87,7 +93,7 @@ fun LoginScreen(
 
                     scope.launch {
                         // 1. Authenticate against local Room database (Offline-First hierarchy)
-                        val localUser = viewModel.authenticateLocalUser(email.trim(), password.trim())
+                        val localUser = viewModel.authenticateLocalUser(trimmedEmail, trimmedPass)
                         if (localUser != null) {
                             isLoading = false
                             val role = localUser.role // SUPER_ADMIN, ADMIN_AREA, PERITO
@@ -99,12 +105,12 @@ fun LoginScreen(
 
                         // 2. Fallback to Firebase Authentication online
                         val auth = FirebaseAuth.getInstance()
-                        auth.signInWithEmailAndPassword(email.trim(), password)
+                        auth.signInWithEmailAndPassword(trimmedEmail, trimmedPass)
                             .addOnCompleteListener { task ->
                                 isLoading = false
                                 if (task.isSuccessful) {
                                     val user = auth.currentUser
-                                    val userId = user?.email ?: email
+                                    val userId = user?.email ?: trimmedEmail
                                     val role = if (userId.contains("super", ignoreCase = true)) "SUPER_ADMIN" else if (userId.contains("admin", ignoreCase = true)) "ADMIN_AREA" else "PERITO"
                                     val area = if (userId.contains("balistica", ignoreCase = true)) "Balística" else if (userId.contains("informatica", ignoreCase = true)) "Informática" else if (userId.contains("dactilo", ignoreCase = true)) "Dactiloscopia" else "General"
                                     viewModel.setUserCredentials(role, userId, area)
@@ -121,7 +127,7 @@ fun LoginScreen(
                 if (isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
                 } else {
-                    Text("Iniciar Sesión (Jerárquico)")
+                    Text("Iniciar Sesión Segura")
                 }
             }
         }
