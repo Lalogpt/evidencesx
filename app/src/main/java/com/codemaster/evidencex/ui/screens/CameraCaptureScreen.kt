@@ -46,15 +46,19 @@ fun CameraCaptureScreen(
 
     @SuppressLint("MissingPermission")
     fun captureWithLocation(onCaptured: (Double, Double) -> Unit) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
-                val lat = location?.latitude ?: 19.4326
-                val lng = location?.longitude ?: -99.1332
-                onCaptured(lat, lng)
-            }.addOnFailureListener {
+        try {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
+                    val lat = location?.latitude ?: 19.4326
+                    val lng = location?.longitude ?: -99.1332
+                    onCaptured(lat, lng)
+                }.addOnFailureListener {
+                    onCaptured(19.4326, -99.1332)
+                }
+            } else {
                 onCaptured(19.4326, -99.1332)
             }
-        } else {
+        } catch (e: Exception) {
             onCaptured(19.4326, -99.1332)
         }
     }
@@ -65,16 +69,20 @@ fun CameraCaptureScreen(
         if (result.resultCode == android.app.Activity.RESULT_OK) {
             val videoUri = result.data?.data
             if (videoUri != null) {
-                val inputStream = context.contentResolver.openInputStream(videoUri)
-                val tempFile = File(context.cacheDir, "evidence_video_${System.currentTimeMillis()}.mp4")
-                inputStream?.use { input ->
-                    tempFile.outputStream().use { output ->
-                        input.copyTo(output)
+                try {
+                    val inputStream = context.contentResolver.openInputStream(videoUri)
+                    val tempFile = File(context.cacheDir, "evidence_video_${System.currentTimeMillis()}.mp4")
+                    inputStream?.use { input ->
+                        tempFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
                     }
-                }
-                captureWithLocation { lat, lng ->
-                    Toast.makeText(context, "Video de 20s grabado con GPS ($lat, $lng)", Toast.LENGTH_SHORT).show()
-                    onEvidenceCaptured(tempFile, tempFile.name, lat, lng, isSensitive)
+                    captureWithLocation { lat, lng ->
+                        Toast.makeText(context, "Video de 20s grabado con GPS ($lat, $lng)", Toast.LENGTH_SHORT).show()
+                        onEvidenceCaptured(tempFile, tempFile.name, lat, lng, isSensitive)
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Error al procesar el video: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -151,9 +159,13 @@ fun CameraCaptureScreen(
                             }
 
                             override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                                captureWithLocation { lat, lng ->
-                                    Toast.makeText(context, "Foto capturada con GPS ($lat, $lng)", Toast.LENGTH_SHORT).show()
-                                    onEvidenceCaptured(photoFile, photoFile.name, lat, lng, isSensitive)
+                                try {
+                                    captureWithLocation { lat, lng ->
+                                        Toast.makeText(context, "Foto capturada con GPS ($lat, $lng)", Toast.LENGTH_SHORT).show()
+                                        onEvidenceCaptured(photoFile, photoFile.name, lat, lng, isSensitive)
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Error al guardar foto: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
                                 }
                             }
                         }
