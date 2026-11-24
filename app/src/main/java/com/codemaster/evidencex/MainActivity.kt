@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PersonAdd
@@ -62,7 +63,10 @@ import com.codemaster.evidencex.ui.viewmodel.EvidenceViewModel
 import com.codemaster.evidencex.util.QrCodeGenerator
 import com.google.android.gms.location.LocationServices
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -438,6 +442,57 @@ fun EvidenceQrDialog(evidence: EvidenceEntity, onDismiss: () -> Unit) {
 }
 
 @Composable
+fun EvidencePhotoDialog(evidence: EvidenceEntity, onDismiss: () -> Unit) {
+    val file = File(evidence.fileUri)
+    val context = LocalContext.current
+    var bitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+
+    LaunchedEffect(evidence.fileUri) {
+        withContext(Dispatchers.IO) {
+            if (file.exists()) {
+                bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+            } else {
+                try {
+                    val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference.child("evidence/${evidence.caseId}/${evidence.fileName}")
+                    val localDir = File(context.filesDir, "secure_evidence").apply { mkdirs() }
+                    val tempFile = File(localDir, evidence.fileName)
+                    storageRef.getFile(tempFile).await()
+                    if (tempFile.exists()) {
+                        bitmap = android.graphics.BitmapFactory.decodeFile(tempFile.absolutePath)
+                    }
+                } catch (e: Exception) {}
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Vista Previa de Fotografía") },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap!!.asImageBitmap(),
+                        contentDescription = "Foto de Evidencia",
+                        modifier = Modifier.size(280.dp)
+                    )
+                } else {
+                    CircularProgressIndicator(modifier = Modifier.padding(16.dp))
+                    Text("Descargando foto desde la nube...", fontSize = 12.sp, color = Color.Gray)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Archivo: ${evidence.fileName}", fontSize = 11.sp, color = Color.Gray)
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("Cerrar")
+            }
+        }
+    )
+}
+
+@Composable
 fun QrScannerDialog(viewModel: EvidenceViewModel, onDismiss: () -> Unit) {
     var scannedInput by remember { mutableStateOf("") }
     var resultMessage by remember { mutableStateOf<String?>(null) }
@@ -519,6 +574,7 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var showQrDialogForEvidence by remember { mutableStateOf<EvidenceEntity?>(null) }
+    var showPhotoDialogForEvidence by remember { mutableStateOf<EvidenceEntity?>(null) }
     var isSensitiveEvidence by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val evidences by remember(case.id) {
@@ -652,6 +708,12 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         if (ev.sensitive) {
                                             Text("⚠️ SENSIBLE", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                        }
+                                        if (ev.fileName.endsWith(".jpg", true) || ev.fileName.endsWith(".png", true)) {
+                                            TextButton(onClick = { showPhotoDialogForEvidence = ev }, contentPadding = PaddingValues(0.dp)) {
+                                                Icon(Icons.Default.Image, contentDescription = "Ver Foto", modifier = Modifier.size(18.dp))
+                                            }
                                             Spacer(modifier = Modifier.width(4.dp))
                                         }
                                         TextButton(onClick = { showQrDialogForEvidence = ev }, contentPadding = PaddingValues(0.dp)) {
@@ -848,6 +910,10 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
 
     if (showQrDialogForEvidence != null) {
         EvidenceQrDialog(evidence = showQrDialogForEvidence!!, onDismiss = { showQrDialogForEvidence = null })
+    }
+
+    if (showPhotoDialogForEvidence != null) {
+        EvidencePhotoDialog(evidence = showPhotoDialogForEvidence!!, onDismiss = { showPhotoDialogForEvidence = null })
     }
 }
 

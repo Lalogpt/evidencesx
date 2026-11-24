@@ -10,7 +10,11 @@ import com.codemaster.evidencex.data.local.entity.SyncTaskEntity
 import com.codemaster.evidencex.data.local.entity.UserEntity
 import com.codemaster.evidencex.domain.crypto.CryptoUtils
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.io.File
 
@@ -347,6 +351,8 @@ class EvidenceRepositoryImpl(
     suspend fun syncPullFromCloud() {
         try {
             val firestore = FirebaseFirestore.getInstance()
+            val storage = FirebaseStorage.getInstance()
+            val evidenceDir = File(context.filesDir, "secure_evidence").apply { mkdirs() }
 
             // 1. Pull Users
             val usersSnap = firestore.collection("users").get().await()
@@ -391,7 +397,7 @@ class EvidenceRepositoryImpl(
                 evidenceDao.insertCase(caseEntity)
             }
 
-            // 3. Pull Evidences
+            // 3. Pull Evidences and background download media file from Firebase Storage
             val evidencesSnap = firestore.collection("evidences").get().await()
             for (doc in evidencesSnap.documents) {
                 val id = doc.getString("id") ?: doc.id
@@ -407,11 +413,23 @@ class EvidenceRepositoryImpl(
                 val timestamp = doc.getLong("timestamp") ?: extractJsonField(payload, "timestamp")?.toLongOrNull() ?: System.currentTimeMillis()
                 val sensitive = doc.getBoolean("sensitive") ?: extractJsonField(payload, "sensitive")?.toBoolean() ?: false
 
+                val localFile = File(evidenceDir, fileName)
+                if (!localFile.exists()) {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            val storageRef = storage.reference.child("evidence/$caseId/$fileName")
+                            storageRef.getFile(localFile).await()
+                        } catch (e: Exception) {
+                            // Ignore if offline or file missing in storage
+                        }
+                    }
+                }
+
                 val evidenceEntity = EvidenceEntity(
                     id = id,
                     caseId = caseId,
                     fileName = fileName,
-                    fileUri = "",
+                    fileUri = localFile.absolutePath,
                     fileHash = fileHash,
                     metadataHash = metadataHash,
                     evidenceHash = evidenceHash,
