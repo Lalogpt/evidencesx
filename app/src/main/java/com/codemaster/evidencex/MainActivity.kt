@@ -713,20 +713,23 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
 
                     // Row 2: Reports (PDF, .EVX)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val scope = rememberCoroutineScope()
                         OutlinedButton(
                             onClick = {
                                 val auditEvents = viewModel.auditEvents.value
-                                val pdfFile = viewModel.generatePdfReport(case, evidences, auditEvents)
-                                try {
-                                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pdfFile)
-                                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                                        setDataAndType(uri, "application/pdf")
-                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                scope.launch {
+                                    val pdfFile = viewModel.generatePdfReport(case, auditEvents)
+                                    try {
+                                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pdfFile)
+                                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                                            setDataAndType(uri, "application/pdf")
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "PDF Guardado: ${pdfFile.absolutePath}", Toast.LENGTH_LONG).show()
                                     }
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "PDF Guardado: ${pdfFile.absolutePath}", Toast.LENGTH_LONG).show()
                                 }
                             },
                             modifier = Modifier.weight(1f),

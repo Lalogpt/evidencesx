@@ -50,6 +50,9 @@ interface EvidenceDao {
     @Query("SELECT * FROM evidence_entity WHERE case_id = :caseId ORDER BY timestamp DESC")
     fun getEvidencesForCase(caseId: String): Flow<List<EvidenceEntity>>
 
+    @Query("SELECT * FROM evidence_entity WHERE case_id = :caseId ORDER BY timestamp DESC")
+    suspend fun getEvidencesForCaseSync(caseId: String): List<EvidenceEntity>
+
     @Query("SELECT * FROM evidence_entity WHERE id = :evidenceId")
     suspend fun getEvidenceById(evidenceId: String): EvidenceEntity?
 

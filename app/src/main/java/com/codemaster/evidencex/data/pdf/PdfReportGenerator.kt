@@ -43,29 +43,31 @@ object PdfReportGenerator {
         paint.strokeWidth = 2f
         canvas.drawLine(40f, 100f, 555f, 100f, paint)
 
-        // Case Details
+        // Case Details & Hierarchy Assignment
         paint.textSize = 14f
         paint.isFakeBoldText = true
-        canvas.drawText("Datos del Expediente:", 40f, 130f, paint)
+        canvas.drawText("Datos del Expediente y Asignación Departamental:", 40f, 125f, paint)
 
         paint.textSize = 11f
         paint.isFakeBoldText = false
-        canvas.drawText("Número de Expediente: ${case.caseNumber}", 40f, 155f, paint)
-        canvas.drawText("Título: ${case.title}", 40f, 175f, paint)
-        canvas.drawText("Descripción: ${case.description}", 40f, 195f, paint)
-        canvas.drawText("Investigador ID: ${case.investigatorId}", 40f, 215f, paint)
-        canvas.drawText("Estado: ${case.status}", 40f, 235f, paint)
+        canvas.drawText("Número de Expediente: ${case.caseNumber}", 40f, 148f, paint)
+        canvas.drawText("Título: ${case.title}", 40f, 166f, paint)
+        canvas.drawText("Descripción: ${case.description}", 40f, 184f, paint)
+        canvas.drawText("Área Pericial: ${case.area}", 40f, 202f, paint)
+        canvas.drawText("Perito a Cargo: ${case.investigatorId}", 40f, 220f, paint)
+        canvas.drawText("Jefe de Área / Responsable: Admin de Área (${case.area})", 40f, 238f, paint)
+        canvas.drawText("Estado: ${case.status}", 40f, 256f, paint)
         val dateStr = DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(case.createdAt).atZone(ZoneOffset.UTC))
-        canvas.drawText("Fecha de Apertura (UTC): $dateStr", 40f, 255f, paint)
+        canvas.drawText("Fecha de Apertura (UTC): $dateStr", 40f, 274f, paint)
 
         // Summary of Evidences with GPS Locations & Hashes
         paint.textSize = 14f
         paint.isFakeBoldText = true
-        canvas.drawText("Resumen de Evidencias Levantadas (${evidences.size}):", 40f, 295f, paint)
+        canvas.drawText("Resumen de Evidencias Levantadas (${evidences.size}):", 40f, 306f, paint)
 
         paint.textSize = 10f
         paint.isFakeBoldText = false
-        var yPos = 325f
+        var yPos = 328f
         evidences.forEachIndexed { index, evidence ->
             if (yPos > 760f) {
                 pdfDocument.finishPage(page)
@@ -76,7 +78,7 @@ object PdfReportGenerator {
             val sensitiveTag = if (evidence.sensitive) "[⚠️ SENSIBLE] " else ""
             val gpsStr = String.format(Locale.US, "Lat: %.4f, Lng: %.4f", evidence.gpsLat, evidence.gpsLng)
             canvas.drawText("${index + 1}. $sensitiveTag${evidence.fileName}", 40f, yPos, paint)
-            canvas.drawText("    GPS: $gpsStr | Hash: ${evidence.evidenceHash.take(24)}...", 40f, yPos + 14f, paint)
+            canvas.drawText("    Ubicación GPS: $gpsStr | Hash: ${evidence.evidenceHash.take(24)}...", 40f, yPos + 14f, paint)
             yPos += 34f
         }
 

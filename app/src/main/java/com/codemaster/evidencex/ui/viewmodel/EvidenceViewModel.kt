@@ -213,7 +213,8 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun generatePdfReport(case: CaseEntity, evidences: List<EvidenceEntity>, auditEvents: List<AuditEventEntity>): File {
+    suspend fun generatePdfReport(case: CaseEntity, auditEvents: List<AuditEventEntity>): File {
+        val evidences = database.evidenceDao().getEvidencesForCaseSync(case.id)
         return PdfReportGenerator.generateCaseReport(getApplication(), case, evidences, auditEvents)
     }
 
