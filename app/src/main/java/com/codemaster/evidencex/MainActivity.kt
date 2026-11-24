@@ -657,11 +657,36 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                                         TextButton(onClick = { showQrDialogForEvidence = ev }, contentPadding = PaddingValues(0.dp)) {
                                             Icon(Icons.Default.QrCode, contentDescription = "Ver Cédula QR", modifier = Modifier.size(18.dp))
                                         }
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        TextButton(
+                                            onClick = {
+                                                try {
+                                                    val file = File(ev.fileUri)
+                                                    if (file.exists()) {
+                                                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                                        val mimeType = if (ev.fileName.endsWith(".mp4", true)) "video/mp4" else "image/*"
+                                                        val intent = Intent(Intent.ACTION_SEND).apply {
+                                                            type = mimeType
+                                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                        }
+                                                        context.startActivity(Intent.createChooser(intent, "Compartir Archivo de Evidencia"))
+                                                    } else {
+                                                        Toast.makeText(context, "Archivo multimedia no disponible localmente.", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                } catch (e: Exception) {
+                                                    Toast.makeText(context, "Error al compartir archivo: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                                                }
+                                            },
+                                            contentPadding = PaddingValues(0.dp)
+                                        ) {
+                                            Icon(Icons.Default.Share, contentDescription = "Compartir Archivo", modifier = Modifier.size(18.dp))
+                                        }
                                     }
                                 }
                                 Text("📍 GPS: Lat ${String.format(Locale.US, "%.4f", ev.gpsLat)}, Lng ${String.format(Locale.US, "%.4f", ev.gpsLng)}", fontSize = 11.sp, color = Color.DarkGray)
                                 Text("🕒 ${formatTimestamp(ev.timestamp)}", fontSize = 10.sp, color = Color.Gray)
-                                Text("🔐 Hash: ${ev.evidenceHash.take(24)}...", fontSize = 10.sp, color = Color.Gray)
+                                Text("🔐 Hash: ${ev.evidenceHash.take(24)}...", fontSize = 10.sp, color = Color.DarkGray)
                             }
                         }
                     }
