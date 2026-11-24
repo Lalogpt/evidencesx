@@ -10,11 +10,17 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
@@ -45,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -497,21 +504,57 @@ fun QrScannerDialog(viewModel: EvidenceViewModel, onDismiss: () -> Unit) {
     var scannedInput by remember { mutableStateOf("") }
     var resultMessage by remember { mutableStateOf<String?>(null) }
     var isError by remember { mutableStateOf(false) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val currentUserRole by viewModel.currentUserRole.collectAsState()
     val currentArea by viewModel.currentArea.collectAsState()
     val scope = rememberCoroutineScope()
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Escanear / Validar Cédula QR Forense") },
+        title = { Text("Escanear Cédula QR Forense") },
         text = {
-            Column {
-                Text("Ingrese o simule el escaneo del ID de la Evidencia:", fontSize = 12.sp, color = Color.Gray)
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                // Live Camera Viewfinder Preview
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                ) {
+                    AndroidView(
+                        factory = { ctx ->
+                            val previewView = PreviewView(ctx)
+                            val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                            cameraProviderFuture.addListener({
+                                val cameraProvider = cameraProviderFuture.get()
+                                val preview = Preview.Builder().build().also {
+                                    it.setSurfaceProvider(previewView.surfaceProvider)
+                                }
+                                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                                try {
+                                    cameraProvider.unbindAll()
+                                    cameraProvider.bindToLifecycle(
+                                        lifecycleOwner, cameraSelector, preview
+                                    )
+                                } catch (_: Exception) {}
+                            }, ContextCompat.getMainExecutor(ctx))
+                            previewView
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Surface(
+                        modifier = Modifier.align(Alignment.Center).size(100.dp),
+                        color = Color.Transparent,
+                        border = BorderStroke(2.dp, Color.Green),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {}
+                }
                 Spacer(modifier = Modifier.height(8.dp))
+                Text("Enfoque el código QR en la cámara o ingrese el ID:", fontSize = 11.sp, color = Color.Gray)
+                Spacer(modifier = Modifier.height(4.dp))
                 OutlinedTextField(
                     value = scannedInput,
                     onValueChange = { scannedInput = it },
-                    label = { Text("ID de Evidencia (UUID)") },
+                    label = { Text("ID de Evidencia o Cédula (UUID)") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 if (resultMessage != null) {
@@ -529,7 +572,7 @@ fun QrScannerDialog(viewModel: EvidenceViewModel, onDismiss: () -> Unit) {
             Button(onClick = {
                 val queryId = scannedInput.trim()
                 if (queryId.isBlank()) {
-                    resultMessage = "Ingrese un ID válido."
+                    resultMessage = "Ingrese o escanee un ID válido."
                     isError = true
                     return@Button
                 }
@@ -919,7 +962,9 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
 
 @Composable
 fun CreateCaseDialog(defaultInvestigatorId: String, defaultArea: String, onDismiss: () -> Unit, onCreate: (String, String, String, String, String) -> Unit) {
-    var caseNumber by remember { mutableStateOf("EXP-2026-002") }
+    val areaCode = defaultArea.take(3).uppercase()
+    val randomId = (1000..9999).random()
+    var caseNumber by remember { mutableStateOf("EXP-$areaCode-$randomId") }
     var title by remember { mutableStateOf("Investigación de Campo") }
     var description by remember { mutableStateOf("Toma de evidencias en sitio.") }
     var investigatorId by remember { mutableStateOf(defaultInvestigatorId) }

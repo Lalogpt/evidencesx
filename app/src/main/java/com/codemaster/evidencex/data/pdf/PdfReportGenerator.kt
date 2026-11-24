@@ -7,6 +7,7 @@ import android.graphics.pdf.PdfDocument
 import com.codemaster.evidencex.data.local.entity.AuditEventEntity
 import com.codemaster.evidencex.data.local.entity.CaseEntity
 import com.codemaster.evidencex.data.local.entity.EvidenceEntity
+import com.codemaster.evidencex.util.QrCodeGenerator
 import java.io.File
 import java.io.FileOutputStream
 import java.time.Instant
@@ -31,43 +32,50 @@ object PdfReportGenerator {
         var canvas: Canvas = page.canvas
 
         // Title
-        paint.textSize = 24f
+        paint.textSize = 22f
         paint.isFakeBoldText = true
-        canvas.drawText("EVIDENCE X - INFORME PERICIAL FORENSE", 40f, 60f, paint)
+        canvas.drawText("EVIDENCE X - INFORME PERICIAL FORENSE", 40f, 55f, paint)
 
-        paint.textSize = 12f
+        paint.textSize = 11f
         paint.isFakeBoldText = false
-        canvas.drawText("Sistema de Investigaciones Digitales con Cadena de Custodia", 40f, 85f, paint)
+        canvas.drawText("Sistema de Investigaciones Digitales con Cadena de Custodia", 40f, 75f, paint)
+
+        // Draw Forensic QR Code Badge on Top-Right
+        try {
+            val qrBitmap = QrCodeGenerator.generateQrBitmap("EVIDENCE_X_CASE:${case.id}:${case.caseNumber}", 100, 100)
+            val scaledQr = android.graphics.Bitmap.createScaledBitmap(qrBitmap, 75, 75, true)
+            canvas.drawBitmap(scaledQr, 470f, 35f, paint)
+        } catch (e: Exception) {}
 
         // Divider
         paint.strokeWidth = 2f
-        canvas.drawLine(40f, 100f, 555f, 100f, paint)
+        canvas.drawLine(40f, 95f, 555f, 95f, paint)
 
         // Case Details & Hierarchy Assignment
         paint.textSize = 14f
         paint.isFakeBoldText = true
-        canvas.drawText("Datos del Expediente y Asignación Departamental:", 40f, 125f, paint)
+        canvas.drawText("Datos del Expediente y Asignación Departamental:", 40f, 120f, paint)
 
         paint.textSize = 11f
         paint.isFakeBoldText = false
-        canvas.drawText("Número de Expediente: ${case.caseNumber}", 40f, 148f, paint)
-        canvas.drawText("Título: ${case.title}", 40f, 166f, paint)
-        canvas.drawText("Descripción: ${case.description}", 40f, 184f, paint)
-        canvas.drawText("Área Pericial: ${case.area}", 40f, 202f, paint)
-        canvas.drawText("Perito a Cargo: ${case.investigatorId}", 40f, 220f, paint)
-        canvas.drawText("Jefe de Área / Responsable: Admin de Área (${case.area})", 40f, 238f, paint)
-        canvas.drawText("Estado: ${case.status}", 40f, 256f, paint)
+        canvas.drawText("Número de Expediente: ${case.caseNumber}", 40f, 142f, paint)
+        canvas.drawText("Título: ${case.title}", 40f, 160f, paint)
+        canvas.drawText("Descripción: ${case.description}", 40f, 178f, paint)
+        canvas.drawText("Área Pericial: ${case.area}", 40f, 196f, paint)
+        canvas.drawText("Perito a Cargo: ${case.investigatorId}", 40f, 214f, paint)
+        canvas.drawText("Jefe de Área / Responsable: Admin de Área (${case.area})", 40f, 232f, paint)
+        canvas.drawText("Estado: ${case.status}", 40f, 250f, paint)
         val dateStr = DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(case.createdAt).atZone(ZoneOffset.UTC))
-        canvas.drawText("Fecha de Apertura (UTC): $dateStr", 40f, 274f, paint)
+        canvas.drawText("Fecha de Apertura (UTC): $dateStr", 40f, 268f, paint)
 
         // Summary of Evidences with GPS Locations & Hashes
         paint.textSize = 14f
         paint.isFakeBoldText = true
-        canvas.drawText("Resumen de Evidencias Levantadas (${evidences.size}):", 40f, 306f, paint)
+        canvas.drawText("Resumen de Evidencias Levantadas (${evidences.size}):", 40f, 300f, paint)
 
         paint.textSize = 10f
         paint.isFakeBoldText = false
-        var yPos = 328f
+        var yPos = 322f
         evidences.forEachIndexed { index, evidence ->
             if (yPos > 760f) {
                 pdfDocument.finishPage(page)

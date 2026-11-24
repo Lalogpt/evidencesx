@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.codemaster.evidencex.data.local.entity.UserEntity
 import com.codemaster.evidencex.ui.viewmodel.EvidenceViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -28,6 +29,9 @@ fun SuperAdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> U
     var selectedArea by remember { mutableStateOf("Balística") }
     val areas = listOf("Balística", "Informática", "Dactiloscopia", "Criminalística")
     var expandedAreaMenu by remember { mutableStateOf(false) }
+
+    var showCreateConfirmDialog by remember { mutableStateOf(false) }
+    var adminToDelete by remember { mutableStateOf<UserEntity?>(null) }
 
     Scaffold(
         topBar = {
@@ -115,11 +119,7 @@ fun SuperAdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> U
                         return@Button
                     }
 
-                    viewModel.createAreaAdminUser(adminName, trimmedEmail, adminPassword.trim(), selectedArea)
-                    Toast.makeText(context, "Admin de Área $selectedArea creado y guardado en BD.", Toast.LENGTH_LONG).show()
-                    adminName = ""
-                    adminEmail = ""
-                    adminPassword = "123456"
+                    showCreateConfirmDialog = true
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -139,10 +139,7 @@ fun SuperAdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> U
                             headlineContent = { Text("${user.name} (${user.id})", fontWeight = FontWeight.SemiBold) },
                             supportingContent = { Text("Área: ${user.area} | Rol: ${user.role}") },
                             trailingContent = {
-                                IconButton(onClick = {
-                                    viewModel.deleteUser(user.id)
-                                    Toast.makeText(context, "Administrador eliminado", Toast.LENGTH_SHORT).show()
-                                }) {
+                                IconButton(onClick = { adminToDelete = user }) {
                                     Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.error)
                                 }
                             }
@@ -151,5 +148,56 @@ fun SuperAdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> U
                 }
             }
         }
+    }
+
+    if (showCreateConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateConfirmDialog = false },
+            title = { Text("Confirmar Registro de Administrador") },
+            text = { Text("¿Deseas registrar al Administrador '$adminName' para el área de $selectedArea?") },
+            confirmButton = {
+                Button(onClick = {
+                    showCreateConfirmDialog = false
+                    viewModel.createAreaAdminUser(adminName, adminEmail.trim(), adminPassword.trim(), selectedArea)
+                    Toast.makeText(context, "Admin de Área $selectedArea creado con éxito.", Toast.LENGTH_LONG).show()
+                    adminName = ""
+                    adminEmail = ""
+                    adminPassword = "123456"
+                }) {
+                    Text("Sí, Registrar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateConfirmDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (adminToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { adminToDelete = null },
+            title = { Text("Confirmar Eliminación de Administrador") },
+            text = { Text("¿Estás seguro de que deseas eliminar al Administrador '${adminToDelete!!.name}' (${adminToDelete!!.id})? Esta acción quedará registrada en la bitácora de auditoría.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val u = adminToDelete!!
+                        adminToDelete = null
+                        viewModel.deleteUser(u.id)
+                        Toast.makeText(context, "Administrador ${u.id} eliminado", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Sí, Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { adminToDelete = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
