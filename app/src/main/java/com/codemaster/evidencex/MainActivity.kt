@@ -290,6 +290,12 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                             Icon(Icons.Default.PersonAdd, contentDescription = "Gestionar Peritos")
                         }
                     }
+                    IconButton(onClick = { navController.navigate("integrity") }) {
+                        Icon(Icons.Default.Lock, contentDescription = "Verificador de Integridad")
+                    }
+                    IconButton(onClick = { navController.navigate("audit_log") }) {
+                        Icon(Icons.Default.Security, contentDescription = "Bitácora")
+                    }
                     IconButton(onClick = { viewModel.triggerSync() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Sincronizar")
                     }
@@ -376,6 +382,7 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                     CreateCaseDialog(
                         defaultInvestigatorId = currentUserId,
                         defaultArea = currentArea,
+                        isAdmin = isAdmin,
                         onDismiss = { showCreateDialog = false },
                         onCreate = { number, title, desc, inv, area ->
                             viewModel.createCase(number, title, desc, inv, area)
@@ -961,7 +968,7 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
 }
 
 @Composable
-fun CreateCaseDialog(defaultInvestigatorId: String, defaultArea: String, onDismiss: () -> Unit, onCreate: (String, String, String, String, String) -> Unit) {
+fun CreateCaseDialog(defaultInvestigatorId: String, defaultArea: String, isAdmin: Boolean, onDismiss: () -> Unit, onCreate: (String, String, String, String, String) -> Unit) {
     val areaCode = defaultArea.take(3).uppercase()
     val randomId = (1000..9999).random()
     var caseNumber by remember { mutableStateOf("EXP-$areaCode-$randomId") }
@@ -975,15 +982,21 @@ fun CreateCaseDialog(defaultInvestigatorId: String, defaultArea: String, onDismi
         title = { Text("Nuevo Expediente Offline-First") },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = { /* dummy */ }, modifier = Modifier.fillMaxWidth()) { Text("Área: $area") }
+                OutlinedButton(onClick = { /* fixed */ }, modifier = Modifier.fillMaxWidth()) { Text("Área Asignada: $area (Bloqueada)") }
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(value = caseNumber, onValueChange = { caseNumber = it }, label = { Text("Número de Expediente") }, modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Título") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Nombre del Hecho / Título") }, modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Descripción") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Descripción de los Hechos") }, modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(value = investigatorId, onValueChange = { investigatorId = it }, label = { Text("ID Perito Asignado") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = investigatorId,
+                    onValueChange = { if (isAdmin) investigatorId = it },
+                    readOnly = !isAdmin,
+                    label = { Text("Perito Asignado") },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         },
         confirmButton = {
