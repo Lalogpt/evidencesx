@@ -8,6 +8,7 @@ import androidx.room.Transaction
 import androidx.room.Update
 import com.codemaster.evidencex.data.local.entity.AuditEventEntity
 import com.codemaster.evidencex.data.local.entity.CaseEntity
+import com.codemaster.evidencex.data.local.entity.ChatMessageEntity
 import com.codemaster.evidencex.data.local.entity.EvidenceEntity
 import com.codemaster.evidencex.data.local.entity.SyncTaskEntity
 import com.codemaster.evidencex.data.local.entity.UserEntity
@@ -55,6 +56,13 @@ interface EvidenceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEvidence(evidenceEntity: EvidenceEntity)
 
+    // --- Chat Messages ---
+    @Query("SELECT * FROM chat_message_entity WHERE (sender_id = :userId1 AND recipient_id = :userId2) OR (sender_id = :userId2 AND recipient_id = :userId1) ORDER BY timestamp ASC")
+    fun getMessagesBetween(userId1: String, userId2: String): Flow<List<ChatMessageEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMessage(messageEntity: ChatMessageEntity)
+
     // --- Audit Events ---
     @Query("SELECT * FROM audit_event_entity ORDER BY timestamp ASC")
     fun getAllAuditEvents(): Flow<List<AuditEventEntity>>
@@ -94,6 +102,15 @@ interface EvidenceDao {
         syncTaskEntity: SyncTaskEntity
     ) {
         deleteUserById(userId)
+        insertSyncTask(syncTaskEntity)
+    }
+
+    @Transaction
+    suspend fun insertMessageAtomically(
+        messageEntity: ChatMessageEntity,
+        syncTaskEntity: SyncTaskEntity
+    ) {
+        insertMessage(messageEntity)
         insertSyncTask(syncTaskEntity)
     }
 

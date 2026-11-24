@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.CameraAlt
@@ -136,6 +137,27 @@ fun EvidenceXAppNavHost(viewModel: EvidenceViewModel = viewModel()) {
             IntegrityScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
         }
         composable(
+            route = "chat/{recipientId}/{recipientName}/{area}",
+            arguments = listOf(
+                navArgument("recipientId") { type = NavType.StringType },
+                navArgument("recipientName") { type = NavType.StringType },
+                navArgument("area") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val recipientId = backStackEntry.arguments?.getString("recipientId") ?: ""
+            val recipientName = backStackEntry.arguments?.getString("recipientName") ?: ""
+            val area = backStackEntry.arguments?.getString("area") ?: ""
+            val currentUserId by viewModel.currentUserId.collectAsState()
+            ChatScreen(
+                viewModel = viewModel,
+                currentUserId = currentUserId,
+                recipientId = recipientId,
+                recipientName = recipientName,
+                area = area,
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(
             route = "camera_capture/{caseId}",
             arguments = listOf(navArgument("caseId") { type = NavType.StringType })
         ) { backStackEntry ->
@@ -180,6 +202,7 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
     val currentUserId by viewModel.currentUserId.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
     var showQrScannerDialog by remember { mutableStateOf(false) }
+    var showPeritoChatSelector by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
     val isAdmin = currentUserRole == "SUPER_ADMIN" || currentUserRole == "ADMIN_AREA"
@@ -223,6 +246,16 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        if (isAdmin) {
+                            showPeritoChatSelector = true
+                        } else {
+                            val adminEmail = "admin.${currentArea.lowercase().replace(" ", "")}@evidencex.com"
+                            navController.navigate("chat/$adminEmail/Admin $currentArea/$currentArea")
+                        }
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat Operativo")
+                    }
                     IconButton(onClick = { showQrScannerDialog = true }) {
                         Icon(Icons.Default.QrCodeScanner, contentDescription = "Escanear Cédula QR Forense")
                     }
@@ -310,6 +343,33 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
 
                 if (showQrScannerDialog) {
                     QrScannerDialog(viewModel = viewModel, onDismiss = { showQrScannerDialog = false })
+                }
+
+                if (showPeritoChatSelector) {
+                    AlertDialog(
+                        onDismissRequest = { showPeritoChatSelector = false },
+                        title = { Text("Seleccionar Perito para Chat") },
+                        text = {
+                            LazyColumn(modifier = Modifier.height(300.dp)) {
+                                items(users.filter { it.role == "PERITO" }) { perito ->
+                                    ListItem(
+                                        headlineContent = { Text(perito.name) },
+                                        supportingContent = { Text("ID: ${perito.id} | Área: ${perito.area}") },
+                                        modifier = Modifier.clickable {
+                                            showPeritoChatSelector = false
+                                            navController.navigate("chat/${perito.id}/${perito.name}/${perito.area}")
+                                        }
+                                    )
+                                    HorizontalDivider()
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showPeritoChatSelector = false }) {
+                                Text("Cerrar")
+                            }
+                        }
+                    )
                 }
             }
         }

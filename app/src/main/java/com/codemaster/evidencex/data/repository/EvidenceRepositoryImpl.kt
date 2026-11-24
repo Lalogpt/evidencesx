@@ -4,6 +4,7 @@ import android.content.Context
 import com.codemaster.evidencex.data.local.dao.EvidenceDao
 import com.codemaster.evidencex.data.local.entity.AuditEventEntity
 import com.codemaster.evidencex.data.local.entity.CaseEntity
+import com.codemaster.evidencex.data.local.entity.ChatMessageEntity
 import com.codemaster.evidencex.data.local.entity.EvidenceEntity
 import com.codemaster.evidencex.data.local.entity.SyncTaskEntity
 import com.codemaster.evidencex.data.local.entity.UserEntity
@@ -26,6 +27,34 @@ class EvidenceRepositoryImpl(
     }
 
     val allAuditEvents: Flow<List<AuditEventEntity>> = evidenceDao.getAllAuditEvents()
+
+    fun getMessagesBetween(userId1: String, userId2: String): Flow<List<ChatMessageEntity>> {
+        return evidenceDao.getMessagesBetween(userId1, userId2)
+    }
+
+    suspend fun sendMessage(senderId: String, recipientId: String, area: String, messageText: String) {
+        val msgId = CryptoUtils.generateUuid()
+        val now = System.currentTimeMillis()
+        val messageEntity = ChatMessageEntity(
+            id = msgId,
+            senderId = senderId,
+            recipientId = recipientId,
+            area = area,
+            message = messageText,
+            timestamp = now,
+            synced = false
+        )
+        val syncTask = SyncTaskEntity(
+            id = CryptoUtils.generateUuid(),
+            entityType = "CHAT",
+            entityId = msgId,
+            operation = "INSERT",
+            payloadJson = "{\"id\":\"$msgId\",\"senderId\":\"$senderId\",\"recipientId\":\"$recipientId\",\"area\":\"$area\",\"message\":\"$messageText\",\"timestamp\":$now}",
+            status = "PENDING",
+            createdAt = now
+        )
+        evidenceDao.insertMessageAtomically(messageEntity, syncTask)
+    }
 
     suspend fun createPeritoUser(name: String, idOrEmail: String, password: String, area: String, role: String = "PERITO") {
         val userEntity = UserEntity(
@@ -422,6 +451,29 @@ class EvidenceRepositoryImpl(
                     synced = true
                 )
                 evidenceDao.insertAuditEvent(auditEntity)
+            }
+
+            // 5. Pull Chat Messages
+            val chatSnap = firestore.collection("chat_messages").get().await()
+            for (doc in chatSnap.documents) {
+                val id = doc.getString("id") ?: doc.id
+                val payload = doc.getString("payload")
+                val senderId = doc.getString("senderId") ?: extractJsonField(payload, "senderId") ?: ""
+                val recipientId = doc.getString("recipientId") ?: extractJsonField(payload, "recipientId") ?: ""
+                val area = doc.getString("area") ?: extractJsonField(payload, "area") ?: "General"
+                val message = doc.getString("message") ?: extractJsonField(payload, "message") ?: ""
+                val timestamp = doc.getLong("timestamp") ?: extractJsonField(payload, "timestamp")?.toLongOrNull() ?: System.currentTimeMillis()
+
+                val chatEntity = ChatMessageEntity(
+                    id = id,
+                    senderId = senderId,
+                    recipientId = recipientId,
+                    area = area,
+                    message = message,
+                    timestamp = timestamp,
+                    synced = true
+                )
+                evidenceDao.insertMessage(chatEntity)
             }
 
         } catch (e: Exception) {

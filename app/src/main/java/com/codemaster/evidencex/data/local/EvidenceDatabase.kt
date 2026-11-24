@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import com.codemaster.evidencex.data.local.dao.EvidenceDao
 import com.codemaster.evidencex.data.local.entity.AuditEventEntity
 import com.codemaster.evidencex.data.local.entity.CaseEntity
+import com.codemaster.evidencex.data.local.entity.ChatMessageEntity
 import com.codemaster.evidencex.data.local.entity.EvidenceEntity
 import com.codemaster.evidencex.data.local.entity.SyncTaskEntity
 import com.codemaster.evidencex.data.local.entity.UserEntity
@@ -17,9 +18,10 @@ import com.codemaster.evidencex.data.local.entity.UserEntity
         EvidenceEntity::class,
         AuditEventEntity::class,
         SyncTaskEntity::class,
-        UserEntity::class
+        UserEntity::class,
+        ChatMessageEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class EvidenceDatabase : RoomDatabase() {

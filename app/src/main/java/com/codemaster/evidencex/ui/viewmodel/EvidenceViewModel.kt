@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.codemaster.evidencex.data.local.EvidenceDatabase
 import com.codemaster.evidencex.data.local.entity.AuditEventEntity
 import com.codemaster.evidencex.data.local.entity.CaseEntity
+import com.codemaster.evidencex.data.local.entity.ChatMessageEntity
 import com.codemaster.evidencex.data.local.entity.EvidenceEntity
 import com.codemaster.evidencex.data.local.entity.UserEntity
 import com.codemaster.evidencex.data.pdf.PdfReportGenerator
@@ -13,6 +14,7 @@ import com.codemaster.evidencex.data.repository.EvidenceRepositoryImpl
 import com.codemaster.evidencex.data.sync.SyncWorker
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -71,10 +73,20 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
     val auditEvents: StateFlow<List<AuditEventEntity>> = repository.allAuditEvents
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    fun getMessagesBetween(userId1: String, userId2: String): Flow<List<ChatMessageEntity>> {
+        return repository.getMessagesBetween(userId1, userId2)
+    }
+
+    fun sendMessage(senderId: String, recipientId: String, area: String, messageText: String) {
+        viewModelScope.launch {
+            repository.sendMessage(senderId, recipientId, area, messageText)
+            triggerSync()
+        }
+    }
+
     private fun seedDefaultAdmins() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // If no users, seed super admin and 3 area admins
                 val defaultAdmins = listOf(
                     UserEntity("superadmin@evidencex.com", "Super Administrador", "superadmin@evidencex.com", "super123", "SUPER_ADMIN", "General", true),
                     UserEntity("admin.balistica@evidencex.com", "Admin Balística", "admin.balistica@evidencex.com", "balistica123", "ADMIN_AREA", "Balística", true),
@@ -84,9 +96,7 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                 for (admin in defaultAdmins) {
                     repository.createPeritoUser(admin.name, admin.id, admin.password, admin.area, admin.role)
                 }
-            } catch (e: Exception) {
-                // Ignore
-            }
+            } catch (e: Exception) {}
         }
     }
 
@@ -98,9 +108,7 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                 firestore.collection("cases").addSnapshotListener { snapshot, _ ->
                     if (snapshot != null) {
                         viewModelScope.launch(Dispatchers.IO) {
-                            try {
-                                repository.syncPullFromCloud()
-                            } catch (e: Exception) {}
+                            try { repository.syncPullFromCloud() } catch (e: Exception) {}
                         }
                     }
                 }
@@ -108,9 +116,15 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                 firestore.collection("evidences").addSnapshotListener { snapshot, _ ->
                     if (snapshot != null) {
                         viewModelScope.launch(Dispatchers.IO) {
-                            try {
-                                repository.syncPullFromCloud()
-                            } catch (e: Exception) {}
+                            try { repository.syncPullFromCloud() } catch (e: Exception) {}
+                        }
+                    }
+                }
+
+                firestore.collection("chat_messages").addSnapshotListener { snapshot, _ ->
+                    if (snapshot != null) {
+                        viewModelScope.launch(Dispatchers.IO) {
+                            try { repository.syncPullFromCloud() } catch (e: Exception) {}
                         }
                     }
                 }
@@ -179,7 +193,7 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun getEvidencesForCase(caseId: String): kotlinx.coroutines.flow.Flow<List<EvidenceEntity>> {
+    fun getEvidencesForCase(caseId: String): Flow<List<EvidenceEntity>> {
         return repository.getEvidencesForCase(caseId)
     }
 
@@ -260,6 +274,11 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                         }
                         "AUDIT" -> {
                             firestore.collection("audit_events").document(task.entityId)
+                                .set(mapOf("id" to task.entityId, "payload" to task.payloadJson, "timestamp" to System.currentTimeMillis()))
+                                .await()
+                        }
+                        "CHAT" -> {
+                            firestore.collection("chat_messages").document(task.entityId)
                                 .set(mapOf("id" to task.entityId, "payload" to task.payloadJson, "timestamp" to System.currentTimeMillis()))
                                 .await()
                         }
