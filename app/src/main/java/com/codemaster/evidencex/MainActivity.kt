@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -40,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -203,6 +205,7 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
     var showCreateDialog by remember { mutableStateOf(false) }
     var showQrScannerDialog by remember { mutableStateOf(false) }
     var showPeritoChatSelector by remember { mutableStateOf(false) }
+    var showOverflowMenu by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
     val isAdmin = currentUserRole == "SUPER_ADMIN" || currentUserRole == "ADMIN_AREA"
@@ -232,15 +235,23 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text("EVIDENCE X - Cadena de Custodia", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            "EVIDENCE X",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         Text(
                             text = when (currentUserRole) {
-                                "SUPER_ADMIN" -> "Modo: Super Administrador (Todas las Áreas)"
-                                "ADMIN_AREA" -> "Modo: Admin de Área ($currentArea)"
-                                else -> "Modo: Perito ($currentUserId)"
+                                "SUPER_ADMIN" -> "Super Admin ($currentArea)"
+                                "ADMIN_AREA" -> "Admin: $currentArea"
+                                else -> "Perito: $currentUserId"
                             },
                             fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                         )
                     }
@@ -257,33 +268,54 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                         Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat Operativo")
                     }
                     IconButton(onClick = { showQrScannerDialog = true }) {
-                        Icon(Icons.Default.QrCodeScanner, contentDescription = "Escanear Cédula QR Forense")
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = "Escanear Cédula QR")
                     }
                     if (isSuperAdmin) {
                         IconButton(onClick = { navController.navigate("super_admin_users") }) {
-                            Icon(Icons.Default.AdminPanelSettings, contentDescription = "Gestionar Admins de Área")
+                            Icon(Icons.Default.AdminPanelSettings, contentDescription = "Gestionar Admins")
                         }
                     } else if (isAdmin) {
                         IconButton(onClick = { navController.navigate("admin_users") }) {
                             Icon(Icons.Default.PersonAdd, contentDescription = "Gestionar Peritos")
                         }
                     }
-                    IconButton(onClick = { navController.navigate("integrity") }) {
-                        Icon(Icons.Default.Lock, contentDescription = "Verificador de Integridad")
-                    }
-                    IconButton(onClick = { navController.navigate("audit_log") }) {
-                        Icon(Icons.Default.Security, contentDescription = "Bitácora")
-                    }
                     IconButton(onClick = { viewModel.triggerSync() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Sincronizar")
                     }
-                    IconButton(onClick = {
-                        FirebaseAuth.getInstance().signOut()
-                        navController.navigate("login") {
-                            popUpTo(0) { inclusive = true }
+                    Box {
+                        IconButton(onClick = { showOverflowMenu = !showOverflowMenu }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Más opciones")
                         }
-                    }) {
-                        Icon(Icons.Default.ExitToApp, contentDescription = "Cerrar Sesión")
+                        DropdownMenu(
+                            expanded = showOverflowMenu,
+                            onDismissRequest = { showOverflowMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Verificador de Integridad") },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    navController.navigate("integrity")
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Bitácora de Auditoría") },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    navController.navigate("audit_log")
+                                }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("Cerrar Sesión", color = MaterialTheme.colorScheme.error) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    FirebaseAuth.getInstance().signOut()
+                                    navController.navigate("login") {
+                                        popUpTo(0) { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -837,8 +869,8 @@ fun AuditLogScreen(viewModel: EvidenceViewModel) {
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text("Bitácora y Cadena de Custodia", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text("Bitácora y Cadena de Custodia", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
