@@ -2,20 +2,11 @@ package com.codemaster.evidencex.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
-import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "evidence_entity",
-    foreignKeys = [
-        ForeignKey(
-            entity = CaseEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["case_id"],
-            onDelete = ForeignKey.CASCADE
-        )
-    ],
     indices = [Index(value = ["case_id"])]
 )
 data class EvidenceEntity(

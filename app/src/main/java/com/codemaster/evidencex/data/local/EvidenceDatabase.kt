@@ -21,7 +21,7 @@ import com.codemaster.evidencex.data.local.entity.UserEntity
         UserEntity::class,
         ChatMessageEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class EvidenceDatabase : RoomDatabase() {
