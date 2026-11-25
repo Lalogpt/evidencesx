@@ -161,6 +161,13 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun saveOrUpdateUser(name: String, idOrEmail: String, password: String, area: String, role: String) {
+        viewModelScope.launch {
+            repository.createPeritoUser(name, idOrEmail, password, area, role)
+            triggerSync()
+        }
+    }
+
     fun deleteUser(userId: String) {
         viewModelScope.launch {
             repository.deleteUser(userId)

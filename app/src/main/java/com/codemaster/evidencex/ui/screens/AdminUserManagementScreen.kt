@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,6 +31,7 @@ fun AdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> Unit) 
     var peritoPassword by remember { mutableStateOf("123456") }
     var showCreateConfirmDialog by remember { mutableStateOf(false) }
     var userToDelete by remember { mutableStateOf<UserEntity?>(null) }
+    var userToEdit by remember { mutableStateOf<UserEntity?>(null) }
 
     LaunchedEffect(users) {
         if (peritoId.isEmpty()) {
@@ -112,8 +114,13 @@ fun AdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> Unit) 
                             headlineContent = { Text("${user.name} (ID: ${user.id})", fontWeight = FontWeight.SemiBold) },
                             supportingContent = { Text("Área: ${user.area} | Contraseña: ${user.password}") },
                             trailingContent = {
-                                IconButton(onClick = { userToDelete = user }) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.error)
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    IconButton(onClick = { userToEdit = user }) {
+                                        Icon(Icons.Default.Edit, contentDescription = "Editar", tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                    IconButton(onClick = { userToDelete = user }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.error)
+                                    }
                                 }
                             }
                         )
@@ -149,6 +156,19 @@ fun AdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> Unit) 
         )
     }
 
+    if (userToEdit != null) {
+        EditUserDialog(
+            user = userToEdit!!,
+            onDismiss = { userToEdit = null },
+            onUpdate = { name, pass, area ->
+                val u = userToEdit!!
+                userToEdit = null
+                viewModel.saveOrUpdateUser(name, u.id, pass, area, u.role)
+                Toast.makeText(context, "Perito ${u.id} actualizado correctamente", Toast.LENGTH_LONG).show()
+            }
+        )
+    }
+
     if (userToDelete != null) {
         AlertDialog(
             onDismissRequest = { userToDelete = null },
@@ -174,4 +194,54 @@ fun AdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> Unit) 
             }
         )
     }
+}
+
+@Composable
+fun EditUserDialog(
+    user: UserEntity,
+    onDismiss: () -> Unit,
+    onUpdate: (name: String, pass: String, area: String) -> Unit
+) {
+    var name by remember { mutableStateOf(user.name) }
+    var password by remember { mutableStateOf(user.password) }
+    var area by remember { mutableStateOf(user.area) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Editar Usuario: ${user.id}") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nombre") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Contraseña") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = area,
+                    onValueChange = { area = it },
+                    label = { Text("Área") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onUpdate(name, password, area) }) {
+                Text("Guardar Cambios")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
 }

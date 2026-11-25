@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,6 +33,7 @@ fun SuperAdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> U
 
     var showCreateConfirmDialog by remember { mutableStateOf(false) }
     var adminToDelete by remember { mutableStateOf<UserEntity?>(null) }
+    var adminToEdit by remember { mutableStateOf<UserEntity?>(null) }
 
     Scaffold(
         topBar = {
@@ -139,8 +141,13 @@ fun SuperAdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> U
                             headlineContent = { Text("${user.name} (${user.id})", fontWeight = FontWeight.SemiBold) },
                             supportingContent = { Text("Área: ${user.area} | Rol: ${user.role}") },
                             trailingContent = {
-                                IconButton(onClick = { adminToDelete = user }) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.error)
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    IconButton(onClick = { adminToEdit = user }) {
+                                        Icon(Icons.Default.Edit, contentDescription = "Editar", tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                    IconButton(onClick = { adminToDelete = user }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.error)
+                                    }
                                 }
                             }
                         )
@@ -171,6 +178,19 @@ fun SuperAdminUserManagementScreen(viewModel: EvidenceViewModel, onBack: () -> U
                 TextButton(onClick = { showCreateConfirmDialog = false }) {
                     Text("Cancelar")
                 }
+            }
+        )
+    }
+
+    if (adminToEdit != null) {
+        EditUserDialog(
+            user = adminToEdit!!,
+            onDismiss = { adminToEdit = null },
+            onUpdate = { name, pass, area ->
+                val u = adminToEdit!!
+                adminToEdit = null
+                viewModel.saveOrUpdateUser(name, u.id, pass, area, u.role)
+                Toast.makeText(context, "Administrador ${u.id} actualizado correctamente", Toast.LENGTH_LONG).show()
             }
         )
     }
