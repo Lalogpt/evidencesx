@@ -393,9 +393,29 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                 if (showPeritoChatSelector) {
                     AlertDialog(
                         onDismissRequest = { showPeritoChatSelector = false },
-                        title = { Text("Seleccionar Perito para Chat") },
+                        title = { Text(if (isSuperAdmin) "Seleccionar Admin o Perito para Chat" else "Seleccionar Perito para Chat") },
                         text = {
-                            LazyColumn(modifier = Modifier.height(300.dp)) {
+                            LazyColumn(modifier = Modifier.height(350.dp)) {
+                                if (isSuperAdmin) {
+                                    item {
+                                        Text("Administradores de Área", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                                    }
+                                    items(users.filter { it.role == "ADMIN_AREA" }) { admin ->
+                                        ListItem(
+                                            headlineContent = { Text(admin.name) },
+                                            supportingContent = { Text("ID: ${admin.id} | Área: ${admin.area}") },
+                                            modifier = Modifier.clickable {
+                                                showPeritoChatSelector = false
+                                                navController.navigate("chat/${admin.id}/${admin.name}/${admin.area}")
+                                            }
+                                        )
+                                        HorizontalDivider()
+                                    }
+                                    item {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text("Peritos de Campo", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                                    }
+                                }
                                 items(users.filter { it.role == "PERITO" }) { perito ->
                                     ListItem(
                                         headlineContent = { Text(perito.name) },
@@ -863,7 +883,7 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                             onClick = { galleryLauncher.launch("*/*") },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp)
+                            contentPadding = PaddingValues(horizontal =.2.dp, vertical = 8.dp)
                         ) {
                             Text("Galería", fontSize = 11.sp)
                         }
@@ -935,7 +955,7 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                             ) {
                                 Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Eliminar", fontSize =.12.sp)
+                                Text("Eliminar", fontSize = 12.sp)
                             }
                         }
                     }
@@ -960,7 +980,7 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
         AlertDialog(
             onDismissRequest = { showDeleteConfirmDialog = false },
             title = { Text("Confirmar Eliminación") },
-            text = { Text("¿Deseas eliminar permanentemente este expediente? THis action will be audited.") },
+            text = { Text("¿Deseas eliminar permanentemente este expediente? Esta acción quedará registrada en la bitácora de auditoría.") },
             confirmButton = {
                 Button(
                     onClick = {
