@@ -591,6 +591,52 @@ fun EvidencePhotoDialog(evidence: EvidenceEntity, onDismiss: () -> Unit) {
 }
 
 @Composable
+fun EvidenceThumbnail(ev: EvidenceEntity) {
+    val context = LocalContext.current
+    var bitmap by remember(ev.id, ev.fileUri) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var isDownloading by remember(ev.id) { mutableStateOf(false) }
+
+    LaunchedEffect(ev.id, ev.fileUri) {
+        withContext(Dispatchers.IO) {
+            val file = File(ev.fileUri)
+            if (file.exists()) {
+                bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
+            } else {
+                isDownloading = true
+                try {
+                    val localDir = File(context.filesDir, "secure_evidence").apply { mkdirs() }
+                    val tempFile = File(localDir, ev.fileName)
+                    val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference.child("evidence/${ev.caseId}/${ev.fileName}")
+                    storageRef.getFile(tempFile).await()
+                    if (tempFile.exists()) {
+                        bitmap = android.graphics.BitmapFactory.decodeFile(tempFile.absolutePath)
+                    }
+                } catch (e: Exception) {}
+                isDownloading = false
+            }
+        }
+    }
+
+    if (bitmap != null) {
+        Spacer(modifier = Modifier.height(4.dp))
+        Image(
+            bitmap = bitmap!!.asImageBitmap(),
+            contentDescription = "Miniatura de Evidencia",
+            modifier = Modifier.fillMaxWidth().height(160.dp)
+        )
+    } else if (isDownloading) {
+        Spacer(modifier = Modifier.height(4.dp))
+        Box(modifier = Modifier.fillMaxWidth().height(60.dp), contentAlignment = Alignment.Center) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Sincronizando foto en tiempo real...", fontSize = 11.sp, color = Color.Gray)
+            }
+        }
+    }
+}
+
+@Composable
 fun QrScannerDialog(viewModel: EvidenceViewModel, onCaseMatched: (CaseEntity) -> Unit, onDismiss: () -> Unit) {
     var scannedInput by remember { mutableStateOf("") }
     var resultMessage by remember { mutableStateOf<String?>(null) }
@@ -623,7 +669,7 @@ fun QrScannerDialog(viewModel: EvidenceViewModel, onCaseMatched: (CaseEntity) ->
             if (!hasAccess) {
                 isError = true
                 matchedCase = null
-                resultMessage = "⚠️ Acceso Denegado por Jurisdicción de Área:\n\nEste expediente pertenece al departamento de [${case.area}]. No corresponde a su área actual [$currentArea]. Por favor, acuda con el responsable a cargo."
+                resultMessage = "⚠️ Acceso Denegado por Jurisdicción de Área:\n\nEste expediente pertenece al departamento de [${case.area}]. No corresponde a su área actual [$currentArea]. Por favor, acuda con el responsable a responsable."
             } else {
                 isError = false
                 matchedCase = case
@@ -961,6 +1007,9 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                                 Text("📍 GPS: Lat ${String.format(Locale.US, "%.4f", ev.gpsLat)}, Lng ${String.format(Locale.US, "%.4f", ev.gpsLng)}", fontSize = 11.sp, color = Color.DarkGray)
                                 Text("🕒 ${formatTimestamp(ev.timestamp)}", fontSize = 10.sp, color = Color.Gray)
                                 Text("🔐 Hash: ${ev.evidenceHash.take(24)}...", fontSize = 10.sp, color = Color.DarkGray)
+                                if (ev.fileName.endsWith(".jpg", true) || ev.fileName.endsWith(".png", true)) {
+                                    EvidenceThumbnail(ev = ev)
+                                }
                             }
                         }
                     }
@@ -1134,7 +1183,7 @@ fun CreateCaseDialog(defaultInvestigatorId: String, defaultArea: String, isAdmin
     val areaCode = defaultArea.take(3).uppercase()
     val randomId = (1000..9999).random()
     var caseNumber by remember { mutableStateOf("EXP-$areaCode-$randomId") }
-    var title by remember { mutableStateOf("Investigación de Campo") }
+    var title by remember { mutableStateOf("Investigación de Field") }
     var description by remember { mutableStateOf("Toma de evidencias en sitio.") }
     var investigatorId by remember { mutableStateOf(defaultInvestigatorId) }
     var area by remember { mutableStateOf(defaultArea) }
