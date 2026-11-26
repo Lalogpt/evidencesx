@@ -376,6 +376,13 @@ class EvidenceRepositoryImpl(
             val casesSnap = firestore.collection("cases").get().await()
             for (doc in casesSnap.documents) {
                 val id = doc.getString("id") ?: doc.id
+
+                // Protect unsynced local modifications (e.g. status updates) from being overwritten by stale cloud data
+                val localCase = evidenceDao.getCaseById(id)
+                if (localCase != null && !localCase.synced) {
+                    continue
+                }
+
                 val payload = doc.getString("payload")
                 val caseNumber = doc.getString("caseNumber") ?: extractJsonField(payload, "caseNumber") ?: "EXP-001"
                 val title = doc.getString("title") ?: extractJsonField(payload, "title") ?: "Expediente Nube"
