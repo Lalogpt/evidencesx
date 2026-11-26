@@ -3,18 +3,24 @@ package com.codemaster.evidencex.util
 import android.graphics.Bitmap
 import android.graphics.Color
 import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
 import com.google.zxing.MultiFormatWriter
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 
 object QrCodeGenerator {
 
     /**
-     * Generates a genuine, scannable QR code Bitmap using ZXing core.
-     * Encodes evidence and case identifiers and integrity hashes.
+     * Generates a genuine, high-contrast, scannable QR code Bitmap using ZXing core
+     * with Error Correction Level H and a clean margin (quiet zone).
      */
     fun generateQrBitmap(content: String, width: Int = 512, height: Int = 512): Bitmap {
         return try {
+            val hints = mapOf(
+                EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.H,
+                EncodeHintType.MARGIN to 2
+            )
             val writer = MultiFormatWriter()
-            val bitMatrix = writer.encode(content, BarcodeFormat.QR_CODE, width, height)
+            val bitMatrix = writer.encode(content, BarcodeFormat.QR_CODE, width, height, hints)
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
             for (x in 0 until width) {
                 for (y in 0 until height) {

@@ -17,6 +17,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -542,6 +543,7 @@ fun QrScannerDialog(viewModel: EvidenceViewModel, onDismiss: () -> Unit) {
                 return@launch
             }
 
+            // Cross-Department RBAC Validation
             val hasAccess = when (currentUserRole) {
                 "SUPER_ADMIN" -> true
                 "ADMIN_AREA" -> case.area.equals(currentArea, ignoreCase = true)
@@ -585,18 +587,24 @@ fun QrScannerDialog(viewModel: EvidenceViewModel, onDismiss: () -> Unit) {
 
                                 imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { imageProxy ->
                                     try {
-                                        val buffer = imageProxy.planes[0].buffer
-                                        val bytes = ByteArray(buffer.remaining())
-                                        buffer.get(bytes)
+                                        val plane = imageProxy.planes[0]
+                                        val buffer = plane.buffer
+                                        val rowStride = plane.rowStride
                                         val width = imageProxy.width
                                         val height = imageProxy.height
+                                        val bytes = ByteArray(buffer.remaining())
+                                        buffer.get(bytes)
                                         imageProxy.close()
 
                                         val source = com.google.zxing.PlanarYUVLuminanceSource(
-                                            bytes, width, height, 0, 0, width, height, false
+                                            bytes, rowStride, height, 0, 0, width, height, false
                                         )
                                         val binaryBitmap = com.google.zxing.BinaryBitmap(com.google.zxing.common.HybridBinarizer(source))
-                                        val result = com.google.zxing.MultiFormatReader().decode(binaryBitmap)
+                                        val hints = mapOf(
+                                            com.google.zxing.DecodeHintType.POSSIBLE_FORMATS to listOf(com.google.zxing.BarcodeFormat.QR_CODE),
+                                            com.google.zxing.DecodeHintType.TRY_HARDER to true
+                                        )
+                                        val result = com.google.zxing.MultiFormatReader().decode(binaryBitmap, hints)
                                         if (result != null && !result.text.isNullOrBlank()) {
                                             val decoded = result.text
                                             android.os.Handler(android.os.Looper.getMainLooper()).post {
@@ -649,7 +657,13 @@ fun QrScannerDialog(viewModel: EvidenceViewModel, onDismiss: () -> Unit) {
         },
         confirmButton = {
             Button(onClick = {
-                validateAndFetch(scannedInput)
+                val queryId = scannedInput.trim()
+                if (queryId.isNotBlank()) {
+                    validateAndFetch(queryId)
+                } else {
+                    resultMessage = "Ingrese un ID válido."
+                    isError = true
+                }
             }) {
                 Text("Validar Jurisdicción")
             }
@@ -766,6 +780,33 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
             if (expanded) {
                 Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider()
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Render Case QR Code directly on screen in Report View
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Cédula QR del Expediente:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                val caseQrBitmap = remember(case.id) {
+                    QrCodeGenerator.generateQrBitmap("EVIDENCE_X_CASE:${case.id}:${case.caseNumber}", 300, 300)
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White, shape = RoundedCornerShape(8.dp))
+                        .padding(12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Image(
+                            bitmap = caseQrBitmap.asImageBitmap(),
+                            contentDescription = "Código QR de Expediente",
+                            modifier = Modifier.size(160.dp)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Exp: ${case.caseNumber}", fontSize = 10.sp, color = Color.DarkGray)
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Sensitive Evidence Toggle inside Card
