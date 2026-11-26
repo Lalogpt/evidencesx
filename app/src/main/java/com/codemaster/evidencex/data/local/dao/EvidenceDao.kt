@@ -21,6 +21,9 @@ interface EvidenceDao {
     @Query("SELECT * FROM case_entity ORDER BY created_at DESC")
     fun getAllCases(): Flow<List<CaseEntity>>
 
+    @Query("SELECT * FROM case_entity")
+    suspend fun getAllCasesSync(): List<CaseEntity>
+
     @Query("SELECT * FROM case_entity WHERE id = :caseId")
     suspend fun getCaseById(caseId: String): CaseEntity?
 
@@ -52,6 +55,9 @@ interface EvidenceDao {
 
     @Query("SELECT * FROM evidence_entity WHERE case_id = :caseId ORDER BY timestamp DESC")
     suspend fun getEvidencesForCaseSync(caseId: String): List<EvidenceEntity>
+
+    @Query("SELECT * FROM evidence_entity")
+    suspend fun getAllEvidencesSync(): List<EvidenceEntity>
 
     @Query("SELECT * FROM evidence_entity WHERE id = :evidenceId")
     suspend fun getEvidenceById(evidenceId: String): EvidenceEntity?

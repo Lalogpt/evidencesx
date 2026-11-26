@@ -134,11 +134,51 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    suspend fun getEvidenceAndCaseDetails(evidenceId: String): Pair<EvidenceEntity?, CaseEntity?> {
+    suspend fun getEvidenceAndCaseDetails(query: String): Pair<EvidenceEntity?, CaseEntity?> {
         val dao = database.evidenceDao()
-        val evidence = dao.getEvidenceById(evidenceId)
-        val case = if (evidence != null) dao.getCaseById(evidence.caseId) else null
-        return Pair(evidence, case)
+        val cleanedQuery = when {
+            query.startsWith("EVIDENCE_X_CASE:") -> query.substringAfter("EVIDENCE_X_CASE:").substringBefore(":")
+            query.startsWith("EVIDENCE_X_REF:") -> query.substringAfter("EVIDENCE_X_REF:").substringBefore(":")
+            else -> query.trim()
+        }
+
+        // 1. Check exact evidence ID
+        var evidence = dao.getEvidenceById(cleanedQuery)
+        var case: CaseEntity? = null
+
+        if (evidence != null) {
+            case = dao.getCaseById(evidence.caseId)
+            return Pair(evidence, case)
+        }
+
+        // 2. Check exact case ID
+        case = dao.getCaseById(cleanedQuery)
+        if (case != null) {
+            val evidences = dao.getEvidencesForCaseSync(case.id)
+            return Pair(evidences.firstOrNull(), case)
+        }
+
+        // 3. Check case number case-insensitively (e.g. EXP-GEN-9316)
+        val allCases = dao.getAllCasesSync()
+        case = allCases.find { it.caseNumber.equals(cleanedQuery, ignoreCase = true) }
+        if (case != null) {
+            val evidences = dao.getEvidencesForCaseSync(case.id)
+            return Pair(evidences.firstOrNull(), case)
+        }
+
+        // 4. Check evidence hash or file name
+        val allEvidences = dao.getAllEvidencesSync()
+        evidence = allEvidences.find { 
+            it.id.equals(cleanedQuery, ignoreCase = true) ||
+            it.evidenceHash.equals(cleanedQuery, ignoreCase = true) ||
+            it.fileName.equals(cleanedQuery, ignoreCase = true)
+        }
+        if (evidence != null) {
+            case = dao.getCaseById(evidence.caseId)
+            return Pair(evidence, case)
+        }
+
+        return Pair(null, null)
     }
 
     fun setUserCredentials(role: String, userId: String, area: String) {
