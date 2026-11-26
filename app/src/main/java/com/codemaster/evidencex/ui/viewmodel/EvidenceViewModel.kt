@@ -45,18 +45,8 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
     private val _currentArea = MutableStateFlow("General")
     val currentArea: StateFlow<String> = _currentArea
 
-    val users: StateFlow<List<UserEntity>> = combine(
-        repository.allUsers,
-        _currentUserRole,
-        _currentArea,
-        _currentUserId
-    ) { allUsers, role, area, userId ->
-        when (role) {
-            "SUPER_ADMIN" -> allUsers
-            "ADMIN_AREA" -> allUsers.filter { it.area.equals(area, ignoreCase = true) || it.id.equals(userId, ignoreCase = true) }
-            else -> allUsers.filter { it.id.equals(userId, ignoreCase = true) }
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val users: StateFlow<List<UserEntity>> = repository.allUsers
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val cases: StateFlow<List<CaseEntity>> = combine(
         repository.allCases,
