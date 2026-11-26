@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.codemaster.evidencex.data.local.entity.CaseEntity
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditCaseDialog(
     case: CaseEntity,
@@ -15,7 +16,9 @@ fun EditCaseDialog(
 ) {
     var title by remember { mutableStateOf(case.title) }
     var description by remember { mutableStateOf(case.description) }
-    var status by remember { mutableStateOf(case.status) }
+    var status by remember { mutableStateOf(case.status.ifBlank { "ACTIVE" }) }
+    val statuses = listOf("ACTIVE", "CLOSED", "ARCHIVED")
+    var expandedStatusMenu by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -36,16 +39,40 @@ fun EditCaseDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = status,
-                    onValueChange = { status = it },
-                    label = { Text("Estado (ACTIVE, CLOSED, ARCHIVED)") },
+
+                // Status Dropdown Menu to prevent typos
+                ExposedDropdownMenuBox(
+                    expanded = expandedStatusMenu,
+                    onExpandedChange = { expandedStatusMenu = !expandedStatusMenu },
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    OutlinedTextField(
+                        value = status,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Estado del Expediente") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedStatusMenu) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
+                    )
+                    ExposedDropdownMenu(
+                        expanded = expandedStatusMenu,
+                        onDismissRequest = { expandedStatusMenu = false }
+                    ) {
+                        statuses.forEach { s ->
+                            DropdownMenuItem(
+                                text = { Text(s) },
+                                onClick = {
+                                    status = s
+                                    expandedStatusMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
-            Button(onClick = { onUpdate(title, description, status) }) {
+            Button(onClick = { onUpdate(title.trim(), description.trim(), status.trim().uppercase()) }) {
                 Text("Guardar Cambios (Registrar Audit)")
             }
         },
