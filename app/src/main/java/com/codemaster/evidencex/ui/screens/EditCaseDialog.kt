@@ -1,13 +1,16 @@
 package com.codemaster.evidencex.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.codemaster.evidencex.data.local.entity.CaseEntity
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditCaseDialog(
     case: CaseEntity,
@@ -18,13 +21,12 @@ fun EditCaseDialog(
     var description by remember { mutableStateOf(case.description) }
     var status by remember { mutableStateOf(case.status.ifBlank { "ACTIVE" }) }
     val statuses = listOf("ACTIVE", "CLOSED", "ARCHIVED")
-    var expandedStatusMenu by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Editar Expediente (Solo Administrador)") },
         text = {
-            Column {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
@@ -38,35 +40,28 @@ fun EditCaseDialog(
                     label = { Text("Descripción") },
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Seleccionar Estado del Expediente:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(4.dp))
 
-                // Status Dropdown Menu to prevent typos
-                ExposedDropdownMenuBox(
-                    expanded = expandedStatusMenu,
-                    onExpandedChange = { expandedStatusMenu = !expandedStatusMenu },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    OutlinedTextField(
-                        value = status,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Estado del Expediente") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedStatusMenu) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
-                    )
-                    ExposedDropdownMenu(
-                        expanded = expandedStatusMenu,
-                        onDismissRequest = { expandedStatusMenu = false }
+                statuses.forEach { s ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { status = s }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        statuses.forEach { s ->
-                            DropdownMenuItem(
-                                text = { Text(s) },
-                                onClick = {
-                                    status = s
-                                    expandedStatusMenu = false
-                                }
-                            )
-                        }
+                        RadioButton(
+                            selected = status.equals(s, ignoreCase = true),
+                            onClick = { status = s }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = s,
+                            fontWeight = if (status.equals(s, ignoreCase = true)) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 14.sp
+                        )
                     }
                 }
             }
