@@ -372,10 +372,12 @@ class EvidenceRepositoryImpl(
                 evidenceDao.insertUser(user)
             }
 
-            // 2. Pull Cases
+            // 2. Pull Cases & Garbage Collect deleted cloud cases
             val casesSnap = firestore.collection("cases").get().await()
+            val cloudCaseIds = mutableSetOf<String>()
             for (doc in casesSnap.documents) {
                 val id = doc.getString("id") ?: doc.id
+                cloudCaseIds.add(id)
                 val existingLocalCase = evidenceDao.getCaseById(id)
                 if (existingLocalCase != null && !existingLocalCase.synced) {
                     continue
@@ -406,10 +408,24 @@ class EvidenceRepositoryImpl(
                 evidenceDao.insertCase(caseEntity)
             }
 
-            // 3. Pull Evidences and background download media file from Firebase Storage
+            val localCases = evidenceDao.getAllCasesSync()
+            for (localCase in localCases) {
+                if (localCase.synced && !cloudCaseIds.contains(localCase.id)) {
+                    evidenceDao.deleteCaseById(localCase.id)
+                }
+            }
+
+            // 3. Pull Evidences & Garbage Collect deleted cloud evidences
             val evidencesSnap = firestore.collection("evidences").get().await()
+            val cloudEvidenceIds = mutableSetOf<String>()
             for (doc in evidencesSnap.documents) {
                 val id = doc.getString("id") ?: doc.id
+                cloudEvidenceIds.add(id)
+                val existingLocalEvidence = evidenceDao.getEvidenceById(id)
+                if (existingLocalEvidence != null && !existingLocalEvidence.synced) {
+                    continue
+                }
+
                 val payload = doc.getString("payload")
                 val caseId = doc.getString("caseId") ?: extractJsonField(payload, "caseId") ?: continue
                 val fileName = doc.getString("fileName") ?: extractJsonField(payload, "fileName") ?: "evidence.jpg"
@@ -450,6 +466,13 @@ class EvidenceRepositoryImpl(
                     synced = true
                 )
                 evidenceDao.insertEvidence(evidenceEntity)
+            }
+
+            val localEvidences = evidenceDao.getAllEvidencesSync()
+            for (localEv in localEvidences) {
+                if (localEv.synced && !cloudEvidenceIds.contains(localEv.id)) {
+                    evidenceDao.deleteEvidenceById(localEv.id)
+                }
             }
 
             // 4. Pull Audit Events
