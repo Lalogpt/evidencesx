@@ -65,6 +65,12 @@ interface EvidenceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEvidence(evidenceEntity: EvidenceEntity)
 
+    @Query("DELETE FROM evidence_entity WHERE case_id = :caseId")
+    suspend fun deleteEvidencesForCase(caseId: String)
+
+    @Query("DELETE FROM evidence_entity WHERE id = :evidenceId")
+    suspend fun deleteEvidenceById(evidenceId: String)
+
     // --- Chat Messages ---
     @Query("SELECT * FROM chat_message_entity WHERE (LOWER(sender_id) = LOWER(:userId1) AND LOWER(recipient_id) = LOWER(:userId2)) OR (LOWER(sender_id) = LOWER(:userId2) AND LOWER(recipient_id) = LOWER(:userId1)) ORDER BY timestamp ASC")
     fun getMessagesBetween(userId1: String, userId2: String): Flow<List<ChatMessageEntity>>
@@ -149,6 +155,17 @@ interface EvidenceDao {
     }
 
     @Transaction
+    suspend fun deleteEvidenceAtomically(
+        evidenceId: String,
+        auditEventEntity: AuditEventEntity,
+        syncTaskEntity: SyncTaskEntity
+    ) {
+        deleteEvidenceById(evidenceId)
+        insertAuditEvent(auditEventEntity)
+        insertSyncTask(syncTaskEntity)
+    }
+
+    @Transaction
     suspend fun insertCaseAtomically(
         caseEntity: CaseEntity,
         auditEventEntity: AuditEventEntity,
@@ -176,6 +193,7 @@ interface EvidenceDao {
         auditEventEntity: AuditEventEntity,
         syncTaskEntity: SyncTaskEntity
     ) {
+        deleteEvidencesForCase(caseId)
         deleteCaseById(caseId)
         insertAuditEvent(auditEventEntity)
         insertSyncTask(syncTaskEntity)
