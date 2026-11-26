@@ -263,12 +263,11 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
     fun triggerSync() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                repository.syncPullFromCloud()
-
                 val dao = database.evidenceDao()
                 val pendingTasks = dao.getPendingSyncTasks()
                 val firestore = FirebaseFirestore.getInstance()
 
+                // 1. Process and upload local pending sync tasks first to update Firestore
                 for (task in pendingTasks) {
                     dao.updateSyncTaskStatus(task.id, "IN_PROGRESS", task.retryCount, null)
                     when (task.entityType) {
@@ -293,6 +292,8 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                                         "updatedAt" to caseEntity.updatedAt
                                     ))
                                     .await()
+                                // Mark case as synced locally in Room after successful upload
+                                dao.updateCase(caseEntity.copy(synced = true))
                             }
                         }
                         "EVIDENCE" -> {
@@ -313,6 +314,7 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                                         "sensitive" to evidence.sensitive
                                     ))
                                     .await()
+                                dao.insertEvidence(evidence.copy(synced = true))
                             }
                         }
                         "AUDIT" -> {
@@ -339,6 +341,10 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                     dao.updateSyncTaskStatus(task.id, "COMPLETED", task.retryCount, null)
                     dao.deleteSyncTask(task.id)
                 }
+
+                // 2. Pull updates from cloud after pushing local changes
+                repository.syncPullFromCloud()
+
             } catch (e: Exception) {
                 android.util.Log.e("TriggerSync", "Error en sincronización manual: ${e.localizedMessage}", e)
             }

@@ -28,12 +28,14 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -41,6 +43,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -835,24 +838,144 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Exp: ${case.caseNumber}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Text("📁 Área: ${case.area}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.secondary)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        ) {
+            // Row 1: Case Number & Area Badge
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = "Exp: ${case.caseNumber}",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = "📁 ${case.area}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
             }
-            Spacer(modifier = Modifier.height(2.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(case.title, style = MaterialTheme.typography.titleMedium)
-                Text("👤 ${case.investigatorId}", fontSize = 11.sp, color = Color.DarkGray)
-            }
-            Text(case.description, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Title: Full Width
+            Text(
+                text = case.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.fillMaxWidth(),
+                softWrap = true
+            )
+
             Spacer(modifier = Modifier.height(4.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Estado: ${case.status}", style = MaterialTheme.typography.bodySmall)
-                Text(if (case.synced) "Sincronizado" else "Pendiente", color = if (case.synced) Color.Green else Color.Red, fontSize = 11.sp)
+
+            // Responsible / Perito Email: Horizontal display with icon
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = case.investigatorId,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                    softWrap = true
+                )
+            }
+
+            if (case.description.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = case.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                    modifier = Modifier.fillMaxWidth(),
+                    softWrap = true,
+                    maxLines = if (expanded) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Status & Sync Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val (statusBgColor, statusTextColor) = when (case.status.uppercase(Locale.ROOT)) {
+                    "ACTIVE", "ACTIVO" -> Pair(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+                    "CLOSED", "CERRADO" -> Pair(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant)
+                    "ARCHIVED", "ARCHIVADO" -> Pair(MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
+                    else -> Pair(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                Surface(
+                    color = statusBgColor,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "Estado: ${case.status}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = statusTextColor,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (case.synced) Icons.Default.CheckCircle else Icons.Default.Sync,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = if (case.synced) Color(0xFF2E7D32) else Color(0xFFD84315)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (case.synced) "Sincronizado" else "Pendiente",
+                        color = if (case.synced) Color(0xFF2E7D32) else Color(0xFFD84315),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
 
             if (expanded) {
@@ -906,7 +1029,7 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                 Text("Evidencias Levantadas (${evidences.size}):", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(4.dp))
                 if (evidences.isEmpty()) {
-                    Text("No hay evidencias registradas en este expediente.", fontSize = 12.sp, color = Color.Gray)
+                    Text("No hay evidencias registradas en este expediente.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     evidences.forEach { ev ->
                         Card(
@@ -958,9 +1081,9 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                                         }
                                     }
                                 }
-                                Text("📍 GPS: Lat ${String.format(Locale.US, "%.4f", ev.gpsLat)}, Lng ${String.format(Locale.US, "%.4f", ev.gpsLng)}", fontSize = 11.sp, color = Color.DarkGray)
-                                Text("🕒 ${formatTimestamp(ev.timestamp)}", fontSize = 10.sp, color = Color.Gray)
-                                Text("🔐 Hash: ${ev.evidenceHash.take(24)}...", fontSize = 10.sp, color = Color.DarkGray)
+                                Text("📍 GPS: Lat ${String.format(Locale.US, "%.4f", ev.gpsLat)}, Lng ${String.format(Locale.US, "%.4f", ev.gpsLng)}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("🕒 ${formatTimestamp(ev.timestamp)}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                                Text("🔐 Hash: ${ev.evidenceHash.take(24)}...", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
