@@ -271,12 +271,7 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                 },
                 actions = {
                     IconButton(onClick = {
-                        if (isAdmin) {
-                            showPeritoChatSelector = true
-                        } else {
-                            val adminEmail = "admin.${currentArea.lowercase().replace(" ", "")}@evidencex.com"
-                            navController.navigate("chat/$adminEmail/Admin $currentArea/$currentArea")
-                        }
+                        showPeritoChatSelector = true
                     }) {
                         Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat Operativo")
                     }
@@ -394,7 +389,11 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                 if (showPeritoChatSelector) {
                     AlertDialog(
                         onDismissRequest = { showPeritoChatSelector = false },
-                        title = { Text(if (isSuperAdmin) "Seleccionar Admin o Perito para Chat" else "Seleccionar Perito para Chat") },
+                        title = { Text(when (currentUserRole) {
+                            "SUPER_ADMIN" -> "Chats de Super Administrador"
+                            "ADMIN_AREA" -> "Chats de Administración ($currentArea)"
+                            else -> "Contactos Operativos"
+                        }) },
                         text = {
                             LazyColumn(modifier = Modifier.height(350.dp)) {
                                 if (isSuperAdmin) {
@@ -416,17 +415,78 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text("Peritos de Campo", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
                                     }
-                                }
-                                items(users.filter { it.role == "PERITO" }) { perito ->
-                                    ListItem(
-                                        headlineContent = { Text(perito.name) },
-                                        supportingContent = { Text("ID: ${perito.id} | Área: ${perito.area}") },
-                                        modifier = Modifier.clickable {
-                                            showPeritoChatSelector = false
-                                            navController.navigate("chat/${perito.id}/${perito.name}/${perito.area}")
-                                        }
-                                    )
-                                    HorizontalDivider()
+                                    items(users.filter { it.role == "PERITO" }) { perito ->
+                                        ListItem(
+                                            headlineContent = { Text(perito.name) },
+                                            supportingContent = { Text("ID: ${perito.id} | Área: ${perito.area}") },
+                                            modifier = Modifier.clickable {
+                                                showPeritoChatSelector = false
+                                                navController.navigate("chat/${perito.id}/${perito.name}/${perito.area}")
+                                            }
+                                        )
+                                        HorizontalDivider()
+                                    }
+                                } else if (currentUserRole == "ADMIN_AREA") {
+                                    item {
+                                        Text("Supervisión Superior", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                                    }
+                                    items(users.filter { it.role == "SUPER_ADMIN" }) { superAdmin ->
+                                        ListItem(
+                                            headlineContent = { Text(superAdmin.name) },
+                                            supportingContent = { Text("Super Administrador General") },
+                                            modifier = Modifier.clickable {
+                                                showPeritoChatSelector = false
+                                                navController.navigate("chat/${superAdmin.id}/${superAdmin.name}/General")
+                                            }
+                                        )
+                                        HorizontalDivider()
+                                    }
+                                    item {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text("Peritos de mi Área ($currentArea)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                                    }
+                                    items(users.filter { it.role == "PERITO" && it.area.equals(currentArea, ignoreCase = true) }) { perito ->
+                                        ListItem(
+                                            headlineContent = { Text(perito.name) },
+                                            supportingContent = { Text("ID: ${perito.id}") },
+                                            modifier = Modifier.clickable {
+                                                showPeritoChatSelector = false
+                                                navController.navigate("chat/${perito.id}/${perito.name}/${perito.area}")
+                                            }
+                                        )
+                                        HorizontalDivider()
+                                    }
+                                } else {
+                                    // PERITO role
+                                    item {
+                                        Text("Supervisión Superior", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                                    }
+                                    items(users.filter { it.role == "SUPER_ADMIN" }) { superAdmin ->
+                                        ListItem(
+                                            headlineContent = { Text(superAdmin.name) },
+                                            supportingContent = { Text("Super Administrador General") },
+                                            modifier = Modifier.clickable {
+                                                showPeritoChatSelector = false
+                                                navController.navigate("chat/${superAdmin.id}/${superAdmin.name}/General")
+                                            }
+                                        )
+                                        HorizontalDivider()
+                                    }
+                                    item {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text("Mi Jefe de Área ($currentArea)", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                                    }
+                                    items(users.filter { it.role == "ADMIN_AREA" && it.area.equals(currentArea, ignoreCase = true) }) { admin ->
+                                        ListItem(
+                                            headlineContent = { Text(admin.name) },
+                                            supportingContent = { Text("Admin: ${admin.id}") },
+                                            modifier = Modifier.clickable {
+                                                showPeritoChatSelector = false
+                                                navController.navigate("chat/${admin.id}/${admin.name}/${admin.area}")
+                                            }
+                                        )
+                                        HorizontalDivider()
+                                    }
                                 }
                             }
                         },
@@ -969,7 +1029,7 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
                         ) {
-                            Text("Exportar .EVX", fontSize = 11.sp)
+                            Text("Exportار .EVX", fontSize = 11.sp)
                         }
                     }
 
