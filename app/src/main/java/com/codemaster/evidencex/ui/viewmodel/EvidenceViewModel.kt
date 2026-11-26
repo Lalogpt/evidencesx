@@ -293,6 +293,7 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                                         "updatedAt" to caseEntity.updatedAt
                                     ))
                                     .await()
+                                dao.updateCase(caseEntity.copy(synced = true))
                             }
                         }
                         "EVIDENCE" -> {
@@ -313,6 +314,7 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                                         "sensitive" to evidence.sensitive
                                     ))
                                     .await()
+                                dao.insertEvidence(evidence.copy(synced = true))
                             }
                         }
                         "AUDIT" -> {
@@ -333,6 +335,7 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                                         "timestamp" to msg.timestamp
                                     ))
                                     .await()
+                                dao.insertMessage(msg.copy(synced = true))
                             }
                         }
                     }
