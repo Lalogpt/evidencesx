@@ -263,85 +263,101 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
     fun triggerSync() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                repository.syncPullFromCloud()
-
                 val dao = database.evidenceDao()
                 val pendingTasks = dao.getPendingSyncTasks()
                 val firestore = FirebaseFirestore.getInstance()
 
+                // 1. PUSH local changes (including deletes) FIRST
                 for (task in pendingTasks) {
                     dao.updateSyncTaskStatus(task.id, "IN_PROGRESS", task.retryCount, null)
-                    when (task.entityType) {
-                        "USER" -> {
-                            firestore.collection("users").document(task.entityId)
-                                .set(mapOf("id" to task.entityId, "payload" to task.payloadJson, "syncedAt" to System.currentTimeMillis()))
-                                .await()
-                        }
-                        "CASE" -> {
-                            val caseEntity = dao.getCaseById(task.entityId)
-                            if (caseEntity != null) {
-                                firestore.collection("cases").document(task.entityId)
-                                    .set(mapOf(
-                                        "id" to caseEntity.id,
-                                        "caseNumber" to caseEntity.caseNumber,
-                                        "title" to caseEntity.title,
-                                        "description" to caseEntity.description,
-                                        "investigatorId" to caseEntity.investigatorId,
-                                        "area" to caseEntity.area,
-                                        "status" to caseEntity.status,
-                                        "createdAt" to caseEntity.createdAt,
-                                        "updatedAt" to caseEntity.updatedAt
-                                    ))
+                    val collectionName = when (task.entityType) {
+                        "USER" -> "users"
+                        "CASE" -> "cases"
+                        "EVIDENCE" -> "evidences"
+                        "AUDIT" -> "audit_events"
+                        "CHAT" -> "chat_messages"
+                        else -> "cases"
+                    }
+
+                    if (task.operation.equals("DELETE", true)) {
+                        firestore.collection(collectionName).document(task.entityId).delete().await()
+                    } else {
+                        when (task.entityType) {
+                            "USER" -> {
+                                firestore.collection("users").document(task.entityId)
+                                    .set(mapOf("id" to task.entityId, "payload" to task.payloadJson, "syncedAt" to System.currentTimeMillis()))
                                     .await()
-                                dao.updateCase(caseEntity.copy(synced = true))
                             }
-                        }
-                        "EVIDENCE" -> {
-                            val evidence = dao.getEvidenceById(task.entityId)
-                            if (evidence != null) {
-                                firestore.collection("evidences").document(task.entityId)
-                                    .set(mapOf(
-                                        "id" to evidence.id,
-                                        "caseId" to evidence.caseId,
-                                        "fileName" to evidence.fileName,
-                                        "notes" to evidence.notes,
-                                        "evidenceHash" to evidence.evidenceHash,
-                                        "metadataHash" to evidence.metadataHash,
-                                        "fileHash" to evidence.fileHash,
-                                        "gpsLat" to evidence.gpsLat,
-                                        "gpsLng" to evidence.gpsLng,
-                                        "timestamp" to evidence.timestamp,
-                                        "sensitive" to evidence.sensitive
-                                    ))
-                                    .await()
-                                dao.insertEvidence(evidence.copy(synced = true))
+                            "CASE" -> {
+                                val caseEntity = dao.getCaseById(task.entityId)
+                                if (caseEntity != null) {
+                                    firestore.collection("cases").document(task.entityId)
+                                        .set(mapOf(
+                                            "id" to caseEntity.id,
+                                            "caseNumber" to caseEntity.caseNumber,
+                                            "title" to caseEntity.title,
+                                            "description" to caseEntity.description,
+                                            "investigatorId" to caseEntity.investigatorId,
+                                            "area" to caseEntity.area,
+                                            "status" to caseEntity.status,
+                                            "createdAt" to caseEntity.createdAt,
+                                            "updatedAt" to caseEntity.updatedAt
+                                        ))
+                                        .await()
+                                    dao.updateCase(caseEntity.copy(synced = true))
+                                }
                             }
-                        }
-                        "AUDIT" -> {
-                            firestore.collection("audit_events").document(task.entityId)
-                                .set(mapOf("id" to task.entityId, "payload" to task.payloadJson, "timestamp" to System.currentTimeMillis()))
-                                .await()
-                        }
-                        "CHAT" -> {
-                            val msg = dao.getMessageById(task.entityId)
-                            if (msg != null) {
-                                firestore.collection("chat_messages").document(task.entityId)
-                                    .set(mapOf(
-                                        "id" to msg.id,
-                                        "senderId" to msg.senderId,
-                                        "recipientId" to msg.recipientId,
-                                        "area" to msg.area,
-                                        "message" to msg.message,
-                                        "timestamp" to msg.timestamp
-                                    ))
+                            "EVIDENCE" -> {
+                                val evidence = dao.getEvidenceById(task.entityId)
+                                if (evidence != null) {
+                                    firestore.collection("evidences").document(task.entityId)
+                                        .set(mapOf(
+                                            "id" to evidence.id,
+                                            "caseId" to evidence.caseId,
+                                            "fileName" to evidence.fileName,
+                                            "notes" to evidence.notes,
+                                            "evidenceHash" to evidence.evidenceHash,
+                                            "metadataHash" to evidence.metadataHash,
+                                            "fileHash" to evidence.fileHash,
+                                            "gpsLat" to evidence.gpsLat,
+                                            "gpsLng" to evidence.gpsLng,
+                                            "timestamp" to evidence.timestamp,
+                                            "sensitive" to evidence.sensitive
+                                        ))
+                                        .await()
+                                    dao.insertEvidence(evidence.copy(synced = true))
+                                }
+                            }
+                            "AUDIT" -> {
+                                firestore.collection("audit_events").document(task.entityId)
+                                    .set(mapOf("id" to task.entityId, "payload" to task.payloadJson, "timestamp" to System.currentTimeMillis()))
                                     .await()
-                                dao.insertMessage(msg.copy(synced = true))
+                            }
+                            "CHAT" -> {
+                                val msg = dao.getMessageById(task.entityId)
+                                if (msg != null) {
+                                    firestore.collection("chat_messages").document(task.entityId)
+                                        .set(mapOf(
+                                            "id" to msg.id,
+                                            "senderId" to msg.senderId,
+                                            "recipientId" to msg.recipientId,
+                                            "area" to msg.area,
+                                            "message" to msg.message,
+                                            "timestamp" to msg.timestamp
+                                        ))
+                                        .await()
+                                    dao.insertMessage(msg.copy(synced = true))
+                                }
                             }
                         }
                     }
                     dao.updateSyncTaskStatus(task.id, "COMPLETED", task.retryCount, null)
                     dao.deleteSyncTask(task.id)
                 }
+
+                // 2. PULL latest data from cloud AFTER pushing local changes
+                repository.syncPullFromCloud()
+
             } catch (e: Exception) {
                 android.util.Log.e("TriggerSync", "Error en sincronización manual: ${e.localizedMessage}", e)
             }
