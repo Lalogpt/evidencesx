@@ -924,7 +924,7 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                             onClick = { galleryLauncher.launch("*/*") },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                            contentPadding = PaddingValues(horizontal =.2.dp, vertical = 8.dp)
+                            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp)
                         ) {
                             Text("Galería", fontSize = 11.sp)
                         }
