@@ -383,7 +383,15 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                 }
 
                 if (showQrScannerDialog) {
-                    QrScannerDialog(viewModel = viewModel, onDismiss = { showQrScannerDialog = false })
+                    QrScannerDialog(
+                        viewModel = viewModel,
+                        onCaseMatched = { case ->
+                            showQrScannerDialog = false
+                            searchQuery = case.caseNumber
+                            Toast.makeText(contextSafe(navController.context), "Expediente ${case.caseNumber} encontrado y enfocado", Toast.LENGTH_SHORT).show()
+                        },
+                        onDismiss = { showQrScannerDialog = false }
+                    )
                 }
 
                 if (showPeritoChatSelector) {
@@ -583,10 +591,11 @@ fun EvidencePhotoDialog(evidence: EvidenceEntity, onDismiss: () -> Unit) {
 }
 
 @Composable
-fun QrScannerDialog(viewModel: EvidenceViewModel, onDismiss: () -> Unit) {
+fun QrScannerDialog(viewModel: EvidenceViewModel, onCaseMatched: (CaseEntity) -> Unit, onDismiss: () -> Unit) {
     var scannedInput by remember { mutableStateOf("") }
     var resultMessage by remember { mutableStateOf<String?>(null) }
     var isError by remember { mutableStateOf(false) }
+    var matchedCase by remember { mutableStateOf<CaseEntity?>(null) }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val currentUserRole by viewModel.currentUserRole.collectAsState()
     val currentArea by viewModel.currentArea.collectAsState()
@@ -598,8 +607,9 @@ fun QrScannerDialog(viewModel: EvidenceViewModel, onDismiss: () -> Unit) {
         scope.launch {
             val (evidence, case) = viewModel.getEvidenceAndCaseDetails(queryId)
             if (evidence == null || case == null) {
-                resultMessage = "❌ Evidencia no encontrada para: $queryId"
+                resultMessage = "❌ Expediente o evidencia no encontrada para: $queryId"
                 isError = true
+                matchedCase = null
                 return@launch
             }
 
@@ -612,9 +622,11 @@ fun QrScannerDialog(viewModel: EvidenceViewModel, onDismiss: () -> Unit) {
 
             if (!hasAccess) {
                 isError = true
-                resultMessage = "⚠️ Acceso Denegado por Jurisdicción de Área:\n\nEsta evidencia pertenece al departamento de [${case.area}]. No corresponde a su área actual [$currentArea]. Por favor, acuda con el responsable a cargo."
+                matchedCase = null
+                resultMessage = "⚠️ Acceso Denegado por Jurisdicción de Área:\n\nEste expediente pertenece al departamento de [${case.area}]. No corresponde a su área actual [$currentArea]. Por favor, acuda con el responsable a cargo."
             } else {
                 isError = false
+                matchedCase = case
                 resultMessage = "✅ Acceso Concedido:\nExpediente: ${case.caseNumber} [Área: ${case.area}]\nInvestigador: ${case.investigatorId}"
             }
         }
@@ -716,16 +728,22 @@ fun QrScannerDialog(viewModel: EvidenceViewModel, onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            Button(onClick = {
-                val queryId = scannedInput.trim()
-                if (queryId.isNotBlank()) {
-                    validateAndFetch(queryId)
-                } else {
-                    resultMessage = "Ingrese un ID válido."
-                    isError = true
+            if (matchedCase != null) {
+                Button(onClick = { onCaseMatched(matchedCase!!) }) {
+                    Text("📁 Ver Expediente")
                 }
-            }) {
-                Text("Validar Jurisdicción")
+            } else {
+                Button(onClick = {
+                    val queryId = scannedInput.trim()
+                    if (queryId.isNotBlank()) {
+                        validateAndFetch(queryId)
+                    } else {
+                        resultMessage = "Ingrese un ID válido."
+                        isError = true
+                    }
+                }) {
+                    Text("Validar Jurisdicción")
+                }
             }
         },
         dismissButton = {
@@ -1029,7 +1047,7 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                             modifier = Modifier.weight(1f),
                             contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
                         ) {
-                            Text("Exportار .EVX", fontSize = 11.sp)
+                            Text("Exportar .EVX", fontSize = 11.sp)
                         }
                     }
 
