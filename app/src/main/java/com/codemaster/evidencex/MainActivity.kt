@@ -11,6 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -290,12 +291,6 @@ fun DashboardScreen(navController: NavController, viewModel: EvidenceViewModel) 
                             Icon(Icons.Default.PersonAdd, contentDescription = "Gestionar Peritos")
                         }
                     }
-                    IconButton(onClick = { navController.navigate("integrity") }) {
-                        Icon(Icons.Default.Lock, contentDescription = "Verificador de Integridad")
-                    }
-                    IconButton(onClick = { navController.navigate("audit_log") }) {
-                        Icon(Icons.Default.Security, contentDescription = "Bitácora")
-                    }
                     IconButton(onClick = { viewModel.triggerSync() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Sincronizar")
                     }
@@ -516,12 +511,39 @@ fun QrScannerDialog(viewModel: EvidenceViewModel, onDismiss: () -> Unit) {
     val currentArea by viewModel.currentArea.collectAsState()
     val scope = rememberCoroutineScope()
 
+    fun validateAndFetch(queryIdRaw: String) {
+        val queryId = queryIdRaw.substringAfterLast(":").trim()
+        scannedInput = queryId
+        scope.launch {
+            val (evidence, case) = viewModel.getEvidenceAndCaseDetails(queryId)
+            if (evidence == null || case == null) {
+                resultMessage = "❌ Evidencia no encontrada para: $queryId"
+                isError = true
+                return@launch
+            }
+
+            val hasAccess = when (currentUserRole) {
+                "SUPER_ADMIN" -> true
+                "ADMIN_AREA" -> case.area.equals(currentArea, ignoreCase = true)
+                else -> case.investigatorId.equals(viewModel.currentUserId.value, ignoreCase = true)
+            }
+
+            if (!hasAccess) {
+                isError = true
+                resultMessage = "⚠️ Acceso Denegado por Jurisdicción de Área:\n\nEsta evidencia pertenece al departamento de [${case.area}]. No corresponde a su área actual [$currentArea]. Por favor, acuda con el responsable a cargo."
+            } else {
+                isError = false
+                resultMessage = "✅ Acceso Concedido:\nExpediente: ${case.caseNumber} [Área: ${case.area}]\nInvestigador: ${case.investigatorId}"
+            }
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Escanear Cédula QR Forense") },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                // Live Camera Viewfinder Preview
+                // Live Camera Viewfinder Preview with ZXing ImageAnalysis
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -536,11 +558,41 @@ fun QrScannerDialog(viewModel: EvidenceViewModel, onDismiss: () -> Unit) {
                                 val preview = Preview.Builder().build().also {
                                     it.setSurfaceProvider(previewView.surfaceProvider)
                                 }
+
+                                val imageAnalysis = ImageAnalysis.Builder()
+                                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                    .build()
+
+                                imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { imageProxy ->
+                                    try {
+                                        val buffer = imageProxy.planes[0].buffer
+                                        val bytes = ByteArray(buffer.remaining())
+                                        buffer.get(bytes)
+                                        val width = imageProxy.width
+                                        val height = imageProxy.height
+                                        imageProxy.close()
+
+                                        val source = com.google.zxing.PlanarYUVLuminanceSource(
+                                            bytes, width, height, 0, 0, width, height, false
+                                        )
+                                        val binaryBitmap = com.google.zxing.BinaryBitmap(com.google.zxing.common.HybridBinarizer(source))
+                                        val result = com.google.zxing.MultiFormatReader().decode(binaryBitmap)
+                                        if (result != null && !result.text.isNullOrBlank()) {
+                                            val decoded = result.text
+                                            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                                validateAndFetch(decoded)
+                                            }
+                                        }
+                                    } catch (_: Exception) {
+                                        imageProxy.close()
+                                    }
+                                }
+
                                 val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
                                 try {
                                     cameraProvider.unbindAll()
                                     cameraProvider.bindToLifecycle(
-                                        lifecycleOwner, cameraSelector, preview
+                                        lifecycleOwner, cameraSelector, preview, imageAnalysis
                                     )
                                 } catch (_: Exception) {}
                             }, ContextCompat.getMainExecutor(ctx))
@@ -577,35 +629,7 @@ fun QrScannerDialog(viewModel: EvidenceViewModel, onDismiss: () -> Unit) {
         },
         confirmButton = {
             Button(onClick = {
-                val queryId = scannedInput.trim()
-                if (queryId.isBlank()) {
-                    resultMessage = "Ingrese o escanee un ID válido."
-                    isError = true
-                    return@Button
-                }
-                scope.launch {
-                    val (evidence, case) = viewModel.getEvidenceAndCaseDetails(queryId)
-                    if (evidence == null || case == null) {
-                        resultMessage = "❌ Evidencia no encontrada en el sistema."
-                        isError = true
-                        return@launch
-                    }
-
-                    // Cross-Department RBAC Validation
-                    val hasAccess = when (currentUserRole) {
-                        "SUPER_ADMIN" -> true
-                        "ADMIN_AREA" -> case.area.equals(currentArea, ignoreCase = true)
-                        else -> case.investigatorId.equals(viewModel.currentUserId.value, ignoreCase = true)
-                    }
-
-                    if (!hasAccess) {
-                        isError = true
-                        resultMessage = "⚠️ Acceso Denegado por Jurisdicción de Área:\n\nEsta evidencia pertenece al departamento de [${case.area}]. No corresponde a su área actual [$currentArea]. Por favor, acuda con el responsable a cargo."
-                    } else {
-                        isError = false
-                        resultMessage = "✅ Acceso Concedido:\nExpediente: ${case.caseNumber} [Área: ${case.area}]\nInvestigador: ${case.investigatorId}"
-                    }
-                }
+                validateAndFetch(scannedInput)
             }) {
                 Text("Validar Jurisdicción")
             }
@@ -776,9 +800,8 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                                                     val file = File(ev.fileUri)
                                                     if (file.exists()) {
                                                         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                                                        val mimeType = if (ev.fileName.endsWith(".mp4", true)) "video/mp4" else "image/*"
                                                         val intent = Intent(Intent.ACTION_SEND).apply {
-                                                            type = mimeType
+                                                            type = if (ev.fileName.endsWith(".mp4", true)) "video/mp4" else "image/*"
                                                             putExtra(Intent.EXTRA_STREAM, uri)
                                                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                                         }
@@ -912,7 +935,7 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
                             ) {
                                 Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Eliminar", fontSize = 12.sp)
+                                Text("Eliminar", fontSize =.12.sp)
                             }
                         }
                     }
@@ -937,7 +960,7 @@ fun CaseCard(case: CaseEntity, viewModel: EvidenceViewModel, navController: NavC
         AlertDialog(
             onDismissRequest = { showDeleteConfirmDialog = false },
             title = { Text("Confirmar Eliminación") },
-            text = { Text("¿Deseas eliminar permanentemente este expediente? Esta acción quedará registrada en la bitácora de auditoría.") },
+            text = { Text("¿Deseas eliminar permanentemente este expediente? THis action will be audited.") },
             confirmButton = {
                 Button(
                     onClick = {
