@@ -286,9 +286,19 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
                                 .await()
                         }
                         "CHAT" -> {
-                            firestore.collection("chat_messages").document(task.entityId)
-                                .set(mapOf("id" to task.entityId, "payload" to task.payloadJson, "timestamp" to System.currentTimeMillis()))
-                                .await()
+                            val msg = dao.getMessageById(task.entityId)
+                            if (msg != null) {
+                                firestore.collection("chat_messages").document(task.entityId)
+                                    .set(mapOf(
+                                        "id" to msg.id,
+                                        "senderId" to msg.senderId,
+                                        "recipientId" to msg.recipientId,
+                                        "area" to msg.area,
+                                        "message" to msg.message,
+                                        "timestamp" to msg.timestamp
+                                    ))
+                                    .await()
+                            }
                         }
                     }
                     dao.updateSyncTaskStatus(task.id, "COMPLETED", task.retryCount, null)

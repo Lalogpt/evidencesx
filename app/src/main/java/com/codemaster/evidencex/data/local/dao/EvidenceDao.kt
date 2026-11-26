@@ -66,6 +66,9 @@ interface EvidenceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(messageEntity: ChatMessageEntity)
 
+    @Query("SELECT * FROM chat_message_entity WHERE id = :msgId")
+    suspend fun getMessageById(msgId: String): ChatMessageEntity?
+
     // --- Audit Events ---
     @Query("SELECT * FROM audit_event_entity ORDER BY timestamp ASC")
     fun getAllAuditEvents(): Flow<List<AuditEventEntity>>

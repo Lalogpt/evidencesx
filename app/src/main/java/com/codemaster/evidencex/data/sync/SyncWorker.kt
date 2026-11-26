@@ -73,6 +73,7 @@ class SyncWorker(
                                     "title" to caseEntity.title,
                                     "description" to caseEntity.description,
                                     "investigatorId" to caseEntity.investigatorId,
+                                    "area" to caseEntity.area,
                                     "status" to caseEntity.status,
                                     "createdAt" to caseEntity.createdAt,
                                     "updatedAt" to caseEntity.updatedAt
@@ -109,6 +110,21 @@ class SyncWorker(
                         firestore.collection("audit_events").document(task.entityId)
                             .set(mapOf("id" to task.entityId, "payload" to task.payloadJson, "timestamp" to System.currentTimeMillis()))
                             .await()
+                    }
+                    "CHAT" -> {
+                        val msg = dao.getMessageById(task.entityId)
+                        if (msg != null) {
+                            firestore.collection("chat_messages").document(task.entityId)
+                                .set(mapOf(
+                                    "id" to msg.id,
+                                    "senderId" to msg.senderId,
+                                    "recipientId" to msg.recipientId,
+                                    "area" to msg.area,
+                                    "message" to msg.message,
+                                    "timestamp" to msg.timestamp
+                                ))
+                                .await()
+                        }
                     }
                 }
 
