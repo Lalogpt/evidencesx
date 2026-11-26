@@ -36,6 +36,10 @@ class EvidenceRepositoryImpl(
         return evidenceDao.getMessagesBetween(userId1, userId2)
     }
 
+    fun getAllMessagesForUser(userId: String): Flow<List<ChatMessageEntity>> {
+        return evidenceDao.getAllMessagesForUser(userId)
+    }
+
     suspend fun sendMessage(senderId: String, recipientId: String, area: String, messageText: String) {
         val msgId = CryptoUtils.generateUuid()
         val now = System.currentTimeMillis()

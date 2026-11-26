@@ -69,6 +69,9 @@ interface EvidenceDao {
     @Query("SELECT * FROM chat_message_entity WHERE (LOWER(sender_id) = LOWER(:userId1) AND LOWER(recipient_id) = LOWER(:userId2)) OR (LOWER(sender_id) = LOWER(:userId2) AND LOWER(recipient_id) = LOWER(:userId1)) ORDER BY timestamp ASC")
     fun getMessagesBetween(userId1: String, userId2: String): Flow<List<ChatMessageEntity>>
 
+    @Query("SELECT * FROM chat_message_entity WHERE LOWER(recipient_id) = LOWER(:userId) OR LOWER(sender_id) = LOWER(:userId) ORDER BY timestamp DESC")
+    fun getAllMessagesForUser(userId: String): Flow<List<ChatMessageEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(messageEntity: ChatMessageEntity)
 

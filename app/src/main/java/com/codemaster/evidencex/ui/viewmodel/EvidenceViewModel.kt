@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.tasks.await
 import java.io.File
 
@@ -75,6 +76,10 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
 
     fun getMessagesBetween(userId1: String, userId2: String): Flow<List<ChatMessageEntity>> {
         return repository.getMessagesBetween(userId1, userId2)
+    }
+
+    fun getAllMessagesForUser(userId: String): Flow<List<ChatMessageEntity>> {
+        return repository.getAllMessagesForUser(userId)
     }
 
     fun sendMessage(senderId: String, recipientId: String, area: String, messageText: String) {
@@ -143,7 +148,7 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
         }
 
         // 1. Check exact evidence ID
-        var evidence = dao.getEvidenceById(cleanedQuery)
+        val evidence = dao.getEvidenceById(cleanedQuery)
         var case: CaseEntity? = null
 
         if (evidence != null) {
@@ -168,14 +173,14 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
 
         // 4. Check evidence hash or file name
         val allEvidences = dao.getAllEvidencesSync()
-        evidence = allEvidences.find { 
+        val foundEvidence = allEvidences.find { 
             it.id.equals(cleanedQuery, ignoreCase = true) ||
             it.evidenceHash.equals(cleanedQuery, ignoreCase = true) ||
             it.fileName.equals(cleanedQuery, ignoreCase = true)
         }
-        if (evidence != null) {
-            case = dao.getCaseById(evidence.caseId)
-            return Pair(evidence, case)
+        if (foundEvidence != null) {
+            case = dao.getCaseById(foundEvidence.caseId)
+            return Pair(foundEvidence, case)
         }
 
         return Pair(null, null)
@@ -260,8 +265,8 @@ class EvidenceViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    suspend fun generatePdfReport(case: CaseEntity, auditEvents: List<AuditEventEntity>): File {
-        val evidences = database.evidenceDao().getEvidencesForCaseSync(case.id)
+    fun generatePdfReport(case: CaseEntity, auditEvents: List<AuditEventEntity>): File {
+        val evidences = runBlocking(Dispatchers.IO) { database.evidenceDao().getEvidencesForCaseSync(case.id) }
         return PdfReportGenerator.generateCaseReport(getApplication(), case, evidences, auditEvents)
     }
 
